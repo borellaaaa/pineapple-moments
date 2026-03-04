@@ -136,3 +136,9 @@
 .notFoundIcon { font-size: 72px; }
 .notFound h2 { font-family: var(--font-title); color: var(--dark); font-size: 28px; }
 .notFound p { color: rgba(27,58,31,0.6); font-family: var(--font-cute); margin-bottom: 8px; }
+
+@media (max-width: 700px) {
+  .sidebar { display: none; }
+  .body { height: auto; flex-direction: column; }
+  .canvasArea { padding: 16px 8px; }
+}
