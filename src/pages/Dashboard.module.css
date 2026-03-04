@@ -138,14 +138,3 @@
   box-shadow: var(--shadow);
 }
 .albumCard:hover .deleteBtn { opacity: 1; }
-
-/* Mobile responsive */
-@media (max-width: 600px) {
-  .header { padding: 12px 16px; }
-  .logo { font-size: 16px; }
-  .email { display: none; }
-  .main { padding: 20px 16px 60px; }
-  .topRow { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .title { font-size: 24px; }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; }
-}

@@ -2,33 +2,35 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
 }
 
 .toolbar {
   background: white;
   border-radius: 16px;
-  padding: 8px 12px;
+  padding: 10px 16px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
   box-shadow: var(--shadow);
   flex-wrap: wrap;
   justify-content: center;
-  width: 100%;
-  max-width: 700px;
 }
 
-.toolGroup { display: flex; gap: 5px; align-items: center; }
+.toolGroup {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
 
 .tool {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border: 2px solid rgba(27,58,31,0.12);
   border-radius: 10px;
   background: white;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   font-family: var(--font-body);
   cursor: pointer;
@@ -38,28 +40,25 @@
   justify-content: center;
 }
 .tool:hover { border-color: var(--green); background: #EAF5EA; }
-.tool.active { border-color: var(--green); background: #C8E6C9; }
+.tool.active { border-color: var(--green); background: #D4EDDA; }
 .tool.danger { border-color: #ff4757; }
 .tool.danger:hover { background: #fff0f1; }
-.tool.save { border-color: var(--green); }
-.tool.save:hover { background: #EAF5EA; }
+.tool.save { border-color: #2ed573; }
+.tool.save:hover { background: #f0fff4; }
 
 .bgColors {
   display: flex;
-  gap: 4px;
+  gap: 5px;
   align-items: center;
-  flex-wrap: wrap;
-  justify-content: center;
 }
 
 .bgBtn {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border: 2px solid rgba(27,58,31,0.15);
   border-radius: 50%;
   cursor: pointer;
   transition: transform 0.15s;
-  flex-shrink: 0;
 }
 .bgBtn:hover { transform: scale(1.2); }
 .bgBtn.bgActive { border-color: var(--green); transform: scale(1.2); }
@@ -67,92 +66,86 @@
 .stickerPanel {
   background: white;
   border-radius: 16px;
-  padding: 12px;
+  padding: 16px;
   box-shadow: var(--shadow);
-  width: 100%;
-  max-width: 700px;
+  text-align: center;
 }
 
 .stickerGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  grid-template-columns: repeat(8, 1fr);
   gap: 4px;
+  max-width: 400px;
 }
 
 .stickerBtn {
-  font-size: 22px;
+  font-size: 24px;
   background: none;
   border: 2px solid transparent;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   padding: 4px;
-  transition: all 0.12s;
+  transition: all 0.15s;
   line-height: 1;
 }
-.stickerBtn:hover { background: #EAF5EA; border-color: var(--green); transform: scale(1.15); }
+.stickerBtn:hover { background: #EAF5EA; border-color: var(--green); transform: scale(1.2); }
 
-/* Properties panel */
 .propsPanel {
   background: white;
   border-radius: 16px;
-  padding: 12px 16px;
+  padding: 16px;
   box-shadow: var(--shadow);
   width: 100%;
   max-width: 700px;
   display: flex;
   gap: 12px;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
 }
 
-.propGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 80px;
-}
-
-.propGroup label {
-  font-size: 11px;
+.propsPanel label {
+  font-size: 12px;
   font-weight: 700;
-  color: rgba(27,58,31,0.55);
+  color: rgba(27,58,31,0.6);
   white-space: nowrap;
 }
 
 .propTextarea {
   border: 2px solid rgba(27,58,31,0.15);
   border-radius: 8px;
-  padding: 6px 8px;
-  font-size: 13px;
+  padding: 6px 10px;
+  font-size: 14px;
   font-family: var(--font-body);
-  width: 160px;
+  width: 180px;
   height: 52px;
   resize: none;
   outline: none;
-  color: var(--dark);
 }
 .propTextarea:focus { border-color: var(--green); }
 
-.fontRow { display: flex; gap: 3px; flex-wrap: wrap; }
+.fontRow {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
 
 .fontBtn {
-  padding: 4px 8px;
+  padding: 4px 10px;
   border: 2px solid rgba(27,58,31,0.15);
-  border-radius: 6px;
+  border-radius: 8px;
   background: white;
   cursor: pointer;
-  font-size: 12px;
-  color: var(--dark);
-  transition: all 0.12s;
+  font-size: 13px;
+  transition: all 0.15s;
 }
 .fontBtn:hover { border-color: var(--green); }
-.fontBtn.fontActive { border-color: var(--green); background: #C8E6C9; }
+.fontBtn.fontActive { border-color: var(--green); background: #D4EDDA; }
 
 .slider {
   -webkit-appearance: none;
   height: 4px;
   border-radius: 2px;
-  background: var(--yellow);
+  background: #F5C800;
   outline: none;
   width: 100px;
 }
@@ -174,24 +167,25 @@
   padding: 2px;
 }
 
-/* The canvas itself - responsive */
 .canvas {
-  width: min(700px, 100%);
-  aspect-ratio: 7 / 5;
-  border-radius: 16px;
-  box-shadow: 0 8px 40px rgba(27,58,31,0.15);
+  width: 700px;
+  height: 500px;
+  border-radius: 20px;
+  box-shadow: 0 8px 40px rgba(27,58,31,0.18);
   position: relative;
   overflow: hidden;
+  cursor: default;
   flex-shrink: 0;
-  touch-action: none;
 }
 
-@media (max-width: 480px) {
-  .canvas { border-radius: 12px; }
+.element {
+  cursor: default;
 }
 
-.element { cursor: default; }
-.element.draggable { cursor: move; }
+.element.draggable {
+  cursor: move;
+}
+
 .element.selected::after {
   content: '';
   position: absolute;
@@ -207,9 +201,9 @@
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  color: rgba(27,58,31,0.25);
+  color: rgba(27,58,31,0.3);
   pointer-events: none;
-  width: 80%;
 }
-.emptyHint span { font-size: 36px; }
-.emptyHint p { font-family: var(--font-cute); font-size: 13px; margin-top: 8px; }
+
+.emptyHint span { font-size: 40px; }
+.emptyHint p { font-family: var(--font-cute); font-size: 14px; margin-top: 8px; max-width: 200px; }

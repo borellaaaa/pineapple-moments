@@ -243,10 +243,3 @@
 }
 .emojiBtn:hover { background: white; transform: scale(1.2); border-color: rgba(27,58,31,0.1); }
 .emojiBtn.emojiActive { background: var(--green-light); border-color: var(--green); }
-
-@media (max-width: 500px) {
-  .layout { flex-direction: column; }
-  .preview { width: 100%; }
-  .colorGrid { grid-template-columns: repeat(6, 1fr); }
-  .emojiGrid { grid-template-columns: repeat(8, 1fr); }
-}
