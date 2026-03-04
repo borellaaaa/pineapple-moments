@@ -30,6 +30,21 @@
   font-family: var(--font-cute);
 }
 
+.colorDots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 2px solid rgba(27,58,31,0.15);
+}
+
 .form {
   flex: 1;
   display: flex;
@@ -45,21 +60,100 @@
   margin-bottom: 6px;
 }
 
+.colorTabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.colorTab {
+  flex: 1;
+  padding: 7px 10px;
+  border: 2px solid rgba(27,58,31,0.15);
+  border-radius: 8px;
+  background: white;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(27,58,31,0.5);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.colorTab:hover { border-color: var(--green); }
+.colorTabActive {
+  border-color: var(--green);
+  background: var(--green-light);
+  color: var(--green-dark);
+}
+
 .colorGrid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 7px;
 }
 
 .colorBtn {
-  height: 36px;
+  height: 32px;
   border: 3px solid transparent;
   border-radius: 10px;
   cursor: pointer;
   transition: transform 0.15s, border-color 0.15s;
 }
-.colorBtn:hover { transform: scale(1.1); }
-.colorBtn.selected { border-color: var(--dark); transform: scale(1.1); }
+.colorBtn:hover { transform: scale(1.12); }
+.colorBtn.selected { border-color: var(--dark); transform: scale(1.12); }
+
+.customColors {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.colorPickerRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.colorPickerRow label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--dark);
+  width: 40px;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.pickerWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.colorInput {
+  width: 48px;
+  height: 48px;
+  border: 2px solid rgba(27,58,31,0.15);
+  border-radius: 12px;
+  cursor: pointer;
+  padding: 3px;
+  background: white;
+  flex-shrink: 0;
+}
+
+.colorHex {
+  font-family: var(--font-hand);
+  font-size: 15px;
+  color: rgba(27,58,31,0.6);
+  letter-spacing: 1px;
+}
+
+.previewGradient {
+  height: 28px;
+  border-radius: 10px;
+  margin-top: 4px;
+  box-shadow: var(--shadow);
+}
 
 .modeRow {
   display: flex;
@@ -81,8 +175,8 @@
 }
 .modeBtn.modeActive {
   border-color: var(--green);
-  background: #EAF5EA;
-  color: var(--green);
+  background: var(--green-light);
+  color: var(--green-dark);
 }
 
 .actions {
