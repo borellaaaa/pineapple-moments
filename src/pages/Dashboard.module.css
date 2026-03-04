@@ -4,7 +4,7 @@
 
 .header {
   background: white;
-  box-shadow: 0 2px 20px rgba(92,61,46,0.08);
+  box-shadow: 0 2px 20px rgba(27,58,31,0.08);
   padding: 16px 40px;
   display: flex;
   justify-content: space-between;
@@ -17,7 +17,7 @@
 .logo {
   font-family: var(--font-title);
   font-size: 20px;
-  color: var(--pink);
+  color: var(--green);
 }
 
 .headerRight {
@@ -28,7 +28,7 @@
 
 .email {
   font-size: 13px;
-  color: rgba(92,61,46,0.5);
+  color: rgba(27,58,31,0.5);
   font-family: var(--font-cute);
 }
 
@@ -50,11 +50,11 @@
 .title {
   font-family: var(--font-title);
   font-size: 32px;
-  color: var(--brown);
+  color: var(--dark);
 }
 
 .sub {
-  color: rgba(92,61,46,0.6);
+  color: rgba(27,58,31,0.6);
   font-family: var(--font-cute);
   margin-top: 4px;
 }
@@ -64,8 +64,8 @@
   padding: 80px 24px;
 }
 .emptyIcon { font-size: 72px; margin-bottom: 16px; }
-.empty h2 { font-family: var(--font-title); font-size: 24px; color: var(--brown); margin-bottom: 8px; }
-.empty p { color: rgba(92,61,46,0.6); font-family: var(--font-cute); margin-bottom: 24px; }
+.empty h2 { font-family: var(--font-title); font-size: 24px; color: var(--dark); margin-bottom: 8px; }
+.empty p { color: rgba(27,58,31,0.6); font-family: var(--font-cute); margin-bottom: 24px; }
 
 .grid {
   display: grid;
@@ -101,13 +101,13 @@
 .albumName {
   font-family: var(--font-title);
   font-size: 16px;
-  color: var(--brown);
+  color: var(--dark);
   margin-bottom: 4px;
 }
 
 .albumDesc {
   font-size: 12px;
-  color: rgba(92,61,46,0.6);
+  color: rgba(27,58,31,0.6);
   font-family: var(--font-cute);
   margin-bottom: 8px;
   overflow: hidden;
@@ -118,7 +118,7 @@
 
 .albumMeta {
   font-size: 11px;
-  color: rgba(92,61,46,0.5);
+  color: rgba(27,58,31,0.5);
   font-weight: 600;
 }
 

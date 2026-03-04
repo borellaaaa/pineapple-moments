@@ -7,7 +7,7 @@
 
 .topBar {
   background: white;
-  border-bottom: 2px solid rgba(92,61,46,0.08);
+  border-bottom: 2px solid rgba(27,58,31,0.08);
   padding: 12px 24px;
   display: flex;
   align-items: center;
@@ -17,7 +17,7 @@
 }
 
 .backBtn {
-  color: var(--pink);
+  color: var(--green);
   font-weight: 700;
   text-decoration: none;
   font-size: 14px;
@@ -36,7 +36,7 @@
 .titleText {
   font-family: var(--font-title);
   font-size: 18px;
-  color: var(--brown);
+  color: var(--dark);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -63,7 +63,7 @@
 
 .saving {
   font-size: 12px;
-  color: rgba(92,61,46,0.5);
+  color: rgba(27,58,31,0.5);
   font-family: var(--font-cute);
   font-style: italic;
 }
@@ -78,7 +78,7 @@
   width: 220px;
   flex-shrink: 0;
   background: white;
-  border-right: 2px solid rgba(92,61,46,0.06);
+  border-right: 2px solid rgba(27,58,31,0.06);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -86,21 +86,21 @@
 
 .coverSection {
   padding: 20px 16px;
-  border-bottom: 2px solid rgba(92,61,46,0.06);
+  border-bottom: 2px solid rgba(27,58,31,0.06);
   text-align: center;
 }
 
 .coverName {
   font-family: var(--font-title);
   font-size: 13px;
-  color: var(--brown);
+  color: var(--dark);
   margin-top: 10px;
   word-break: break-word;
 }
 
 .coverDesc {
   font-size: 11px;
-  color: rgba(92,61,46,0.5);
+  color: rgba(27,58,31,0.5);
   margin-top: 4px;
   font-family: var(--font-cute);
   word-break: break-word;
@@ -116,12 +116,12 @@
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: rgba(92,61,46,0.5);
+  color: rgba(27,58,31,0.5);
   margin-bottom: 10px;
 }
 
 .addPageBtn {
-  background: var(--pink);
+  background: var(--green);
   color: white;
   border: none;
   border-radius: 50%;
@@ -135,7 +135,7 @@
   align-items: center;
   justify-content: center;
 }
-.addPageBtn:hover { background: #e05589; }
+.addPageBtn:hover { background: #2A6B2E; }
 
 .pagesList { display: flex; flex-direction: column; gap: 6px; }
 
@@ -144,7 +144,7 @@
 .pageThumb {
   width: 100%;
   padding: 10px 12px;
-  background: #FFF0F7;
+  background: #EAF5EA;
   border: 2px solid transparent;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -154,17 +154,17 @@
   justify-content: space-between;
   align-items: center;
 }
-.pageThumb:hover { border-color: rgba(255,107,157,0.4); }
-.pageThumb.activePage { border-color: var(--pink); background: #FFE4F0; }
+.pageThumb:hover { border-color: rgba(58,140,63,0.4); }
+.pageThumb.activePage { border-color: var(--green); background: #D4EDDA; }
 
-.pageNum { font-weight: 700; font-size: 13px; color: var(--brown); }
-.pageElem { font-size: 10px; color: rgba(92,61,46,0.5); }
+.pageNum { font-weight: 700; font-size: 13px; color: var(--dark); }
+.pageElem { font-size: 10px; color: rgba(27,58,31,0.5); }
 
 .canvasArea {
   flex: 1;
   overflow: auto;
   background: #F5F0EA;
-  background-image: radial-gradient(circle, rgba(255,107,157,0.08) 1px, transparent 1px);
+  background-image: radial-gradient(circle, rgba(58,140,63,0.08) 1px, transparent 1px);
   background-size: 24px 24px;
   display: flex;
   flex-direction: column;
@@ -177,5 +177,5 @@
   margin: auto;
   padding: 40px;
 }
-.emptyState h2 { font-family: var(--font-title); font-size: 24px; color: var(--brown); margin: 16px 0 8px; }
-.emptyState p { color: rgba(92,61,46,0.6); font-family: var(--font-cute); margin-bottom: 24px; }
+.emptyState h2 { font-family: var(--font-title); font-size: 24px; color: var(--dark); margin: 16px 0 8px; }
+.emptyState p { color: rgba(27,58,31,0.6); font-family: var(--font-cute); margin-bottom: 24px; }

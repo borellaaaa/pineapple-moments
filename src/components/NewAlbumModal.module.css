@@ -17,14 +17,14 @@
 .previewName {
   font-family: var(--font-title);
   font-size: 13px;
-  color: var(--brown);
+  color: var(--dark);
   margin-top: 10px;
   word-break: break-word;
 }
 
 .previewDesc {
   font-size: 11px;
-  color: rgba(92,61,46,0.5);
+  color: rgba(27,58,31,0.5);
   margin-top: 4px;
   word-break: break-word;
   font-family: var(--font-cute);
@@ -41,7 +41,7 @@
   display: block;
   font-weight: 700;
   font-size: 13px;
-  color: var(--brown);
+  color: var(--dark);
   margin-bottom: 6px;
 }
 
@@ -59,7 +59,7 @@
   transition: transform 0.15s, border-color 0.15s;
 }
 .colorBtn:hover { transform: scale(1.1); }
-.colorBtn.selected { border-color: var(--brown); transform: scale(1.1); }
+.colorBtn.selected { border-color: var(--dark); transform: scale(1.1); }
 
 .modeRow {
   display: flex;
@@ -69,10 +69,10 @@
 .modeBtn {
   flex: 1;
   padding: 10px;
-  border: 2px solid rgba(92,61,46,0.15);
+  border: 2px solid rgba(27,58,31,0.15);
   border-radius: var(--radius-sm);
   background: white;
-  color: rgba(92,61,46,0.6);
+  color: rgba(27,58,31,0.6);
   font-family: var(--font-body);
   font-weight: 600;
   font-size: 13px;
@@ -80,9 +80,9 @@
   transition: all 0.2s;
 }
 .modeBtn.modeActive {
-  border-color: var(--pink);
-  background: #FFF0F7;
-  color: var(--pink);
+  border-color: var(--green);
+  background: #EAF5EA;
+  color: var(--green);
 }
 
 .actions {
