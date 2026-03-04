@@ -17,24 +17,29 @@ const PRESETS = [
   ['#EC407A', '#F48FB1'],
 ]
 
+const EMOJIS = [
+  '🍍','📸','💛','🌿','🌸','⭐','🦋','🍓','🌈','💖',
+  '🌙','🍦','🎀','✨','🌺','🍭','🐱','🐰','🌻','🍉',
+  '🎵','🎨','🌷','🦄','🍋','💫','🌊','🍄','🎠','🧸',
+  '🍰','🌼','🦩','🎡','🍩','🌟','💝','🎈','🐝','🌿',
+  '🏖️','🎪','🦊','🐸','🍀','🌍','🏔️','🎭','🦋','🌙',
+]
+
 export default function NewAlbumModal({ onClose, onCreate, loading }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [color1, setColor1] = useState('#F5C800')
   const [color2, setColor2] = useState('#3A8C3F')
+  const [emoji, setEmoji] = useState('🍍')
   const [shareMode, setShareMode] = useState('view')
-  const [tab, setTab] = useState('presets') // presets | custom
+  const [tab, setTab] = useState('presets')
+  const [showEmojis, setShowEmojis] = useState(false)
 
   const previewAlbum = {
-    name,
-    description,
+    name, description,
     cover_color: color1,
     cover_accent: color2,
-  }
-
-  const applyPreset = (c1, c2) => {
-    setColor1(c1)
-    setColor2(c2)
+    cover_emoji: emoji,
   }
 
   const handle = (e) => {
@@ -45,6 +50,7 @@ export default function NewAlbumModal({ onClose, onCreate, loading }) {
       description: description.trim(),
       cover_color: color1,
       cover_accent: color2,
+      cover_emoji: emoji,
       share_mode: shareMode,
     })
   }
@@ -74,55 +80,60 @@ export default function NewAlbumModal({ onClose, onCreate, loading }) {
               <textarea className="input" value={description} onChange={e=>setDescription(e.target.value)} placeholder="Uma breve descrição..." rows={2} maxLength={200} />
             </div>
 
+            {/* Emoji picker */}
+            <div className={styles.field}>
+              <label>Emoji da capa</label>
+              <div className={styles.emojiRow}>
+                <button type="button" className={styles.emojiSelected} onClick={()=>setShowEmojis(!showEmojis)}>
+                  {emoji} <span className={styles.emojiArrow}>{showEmojis ? '▲' : '▼'}</span>
+                </button>
+                <span className={styles.emojiHint}>Clique para trocar</span>
+              </div>
+              {showEmojis && (
+                <div className={styles.emojiGrid}>
+                  {EMOJIS.map(e => (
+                    <button
+                      key={e}
+                      type="button"
+                      className={`${styles.emojiBtn} ${emoji===e?styles.emojiActive:''}`}
+                      onClick={()=>{ setEmoji(e); setShowEmojis(false) }}
+                    >{e}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Color picker */}
             <div className={styles.field}>
               <label>Cor da capa 🎨</label>
               <div className={styles.colorTabs}>
-                <button type="button" className={`${styles.colorTab} ${tab==='presets'?styles.colorTabActive:''}`} onClick={()=>setTab('presets')}>
-                  Paletas prontas
-                </button>
-                <button type="button" className={`${styles.colorTab} ${tab==='custom'?styles.colorTabActive:''}`} onClick={()=>setTab('custom')}>
-                  Personalizar
-                </button>
+                <button type="button" className={`${styles.colorTab} ${tab==='presets'?styles.colorTabActive:''}`} onClick={()=>setTab('presets')}>Paletas prontas</button>
+                <button type="button" className={`${styles.colorTab} ${tab==='custom'?styles.colorTabActive:''}`} onClick={()=>setTab('custom')}>Personalizar</button>
               </div>
-
               {tab === 'presets' && (
                 <div className={styles.colorGrid}>
                   {PRESETS.map(([c1, c2], i) => (
-                    <button
-                      key={i}
-                      type="button"
+                    <button key={i} type="button"
                       className={`${styles.colorBtn} ${color1===c1&&color2===c2?styles.selected:''}`}
                       style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
-                      onClick={()=>applyPreset(c1, c2)}
-                      title={`${c1} → ${c2}`}
+                      onClick={()=>{ setColor1(c1); setColor2(c2) }}
                     />
                   ))}
                 </div>
               )}
-
               {tab === 'custom' && (
                 <div className={styles.customColors}>
                   <div className={styles.colorPickerRow}>
                     <label>Cor 1</label>
                     <div className={styles.pickerWrap}>
-                      <input
-                        type="color"
-                        value={color1}
-                        onChange={e=>setColor1(e.target.value)}
-                        className={styles.colorInput}
-                      />
+                      <input type="color" value={color1} onChange={e=>setColor1(e.target.value)} className={styles.colorInput} />
                       <span className={styles.colorHex}>{color1}</span>
                     </div>
                   </div>
                   <div className={styles.colorPickerRow}>
                     <label>Cor 2</label>
                     <div className={styles.pickerWrap}>
-                      <input
-                        type="color"
-                        value={color2}
-                        onChange={e=>setColor2(e.target.value)}
-                        className={styles.colorInput}
-                      />
+                      <input type="color" value={color2} onChange={e=>setColor2(e.target.value)} className={styles.colorInput} />
                       <span className={styles.colorHex}>{color2}</span>
                     </div>
                   </div>

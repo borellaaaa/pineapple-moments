@@ -17,18 +17,26 @@ const PRESETS = [
   ['#EC407A', '#F48FB1'],
 ]
 
+const EMOJIS = [
+  '🍍','📸','💛','🌿','🌸','⭐','🦋','🍓','🌈','💖',
+  '🌙','🍦','🎀','✨','🌺','🍭','🐱','🐰','🌻','🍉',
+  '🎵','🎨','🌷','🦄','🍋','💫','🌊','🍄','🎠','🧸',
+  '🍰','🌼','🦩','🎡','🍩','🌟','💝','🎈','🐝','🌿',
+  '🏖️','🎪','🦊','🐸','🍀','🌍','🏔️','🎭','🦋','🌙',
+]
+
 export default function EditAlbumModal({ album, onClose, onSave }) {
   const [name, setName] = useState(album.name)
   const [description, setDescription] = useState(album.description || '')
   const [color1, setColor1] = useState(album.cover_color || '#F5C800')
   const [color2, setColor2] = useState(album.cover_accent || '#3A8C3F')
+  const [emoji, setEmoji] = useState(album.cover_emoji || '🍍')
   const [shareMode, setShareMode] = useState(album.share_mode || 'view')
   const [loading, setLoading] = useState(false)
   const [tab, setTab] = useState('presets')
+  const [showEmojis, setShowEmojis] = useState(false)
 
-  const previewAlbum = { name, description, cover_color: color1, cover_accent: color2 }
-
-  const applyPreset = (c1, c2) => { setColor1(c1); setColor2(c2) }
+  const previewAlbum = { name, description, cover_color: color1, cover_accent: color2, cover_emoji: emoji }
 
   const handle = async (e) => {
     e.preventDefault()
@@ -38,6 +46,7 @@ export default function EditAlbumModal({ album, onClose, onSave }) {
       description: description.trim(),
       cover_color: color1,
       cover_accent: color2,
+      cover_emoji: emoji,
       share_mode: shareMode,
     })
     setLoading(false)
@@ -67,24 +76,42 @@ export default function EditAlbumModal({ album, onClose, onSave }) {
             </div>
 
             <div className={styles.field}>
+              <label>Emoji da capa</label>
+              <div className={styles.emojiRow}>
+                <button type="button" className={styles.emojiSelected} onClick={()=>setShowEmojis(!showEmojis)}>
+                  {emoji} <span className={styles.emojiArrow}>{showEmojis ? '▲' : '▼'}</span>
+                </button>
+                <span className={styles.emojiHint}>Clique para trocar</span>
+              </div>
+              {showEmojis && (
+                <div className={styles.emojiGrid}>
+                  {EMOJIS.map(e => (
+                    <button key={e} type="button"
+                      className={`${styles.emojiBtn} ${emoji===e?styles.emojiActive:''}`}
+                      onClick={()=>{ setEmoji(e); setShowEmojis(false) }}
+                    >{e}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className={styles.field}>
               <label>Cor da capa 🎨</label>
               <div className={styles.colorTabs}>
                 <button type="button" className={`${styles.colorTab} ${tab==='presets'?styles.colorTabActive:''}`} onClick={()=>setTab('presets')}>Paletas prontas</button>
                 <button type="button" className={`${styles.colorTab} ${tab==='custom'?styles.colorTabActive:''}`} onClick={()=>setTab('custom')}>Personalizar</button>
               </div>
-
               {tab === 'presets' && (
                 <div className={styles.colorGrid}>
                   {PRESETS.map(([c1, c2], i) => (
                     <button key={i} type="button"
                       className={`${styles.colorBtn} ${color1===c1&&color2===c2?styles.selected:''}`}
                       style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
-                      onClick={()=>applyPreset(c1, c2)}
+                      onClick={()=>{ setColor1(c1); setColor2(c2) }}
                     />
                   ))}
                 </div>
               )}
-
               {tab === 'custom' && (
                 <div className={styles.customColors}>
                   <div className={styles.colorPickerRow}>

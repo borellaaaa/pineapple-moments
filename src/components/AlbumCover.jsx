@@ -1,25 +1,18 @@
 import styles from './AlbumCover.module.css'
 
-const PATTERNS = [
-  'none',
-  'dots',
-  'stripes',
-  'hearts',
-  'stars',
-]
-
 export default function AlbumCover({ album, small = false }) {
   const size = small ? styles.small : styles.full
+  const emoji = album.cover_emoji || '🍍'
 
   return (
     <div
       className={`${styles.cover} ${size}`}
       style={{
-        background: `linear-gradient(135deg, ${album.cover_color || '#FFD93D'}, ${album.cover_accent || '#FF6B9D'})`,
+        background: `linear-gradient(135deg, ${album.cover_color || '#F5C800'}, ${album.cover_accent || '#3A8C3F'})`,
       }}
     >
       <div className={styles.inner}>
-        <div className={styles.spine} style={{ background: album.cover_accent || '#FF6B9D' }} />
+        <div className={styles.spine} style={{ background: album.cover_accent || '#3A8C3F' }} />
         <div className={styles.front}>
           <div className={styles.decoration}>
             <span className={styles.topLeft}>🌸</span>
@@ -28,7 +21,7 @@ export default function AlbumCover({ album, small = false }) {
             <span className={styles.bottomRight}>💖</span>
           </div>
           <div className={styles.centerBox}>
-            <span className={styles.pineapple}>🍍</span>
+            <span className={styles.pineapple}>{emoji}</span>
             {!small && (
               <p className={styles.coverTitle} style={{ fontFamily: 'var(--font-title)' }}>
                 {album.name}
