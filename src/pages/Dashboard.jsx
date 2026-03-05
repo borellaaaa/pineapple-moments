@@ -3,10 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { getMyAlbums, createAlbum, deleteAlbum, signOut } from '../lib/supabase'
-import { v4 as uuidv4 } from 'uuid'
-import NewAlbumModal from '../components/NewAlbumModal'
 import AlbumCover from '../components/AlbumCover'
-import styles from './Dashboard.module.css'
+import NewAlbumModal from '../components/NewAlbumModal'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -17,24 +15,18 @@ export default function Dashboard() {
   const [showModal, setShowModal] = useState(false)
   const [creating, setCreating] = useState(false)
 
-  useEffect(() => {
-    loadAlbums()
-  }, [user])
+  useEffect(() => { loadAlbums() }, [user])
 
   async function loadAlbums() {
     if (!user) return
-    setLoading(true)
     const { data, error } = await getMyAlbums(user.id)
     if (!error) setAlbums(data || [])
     setLoading(false)
   }
 
-  async function handleCreate(formData) {
+  async function handleCreate(data) {
     setCreating(true)
-    const { album, error } = await createAlbum(user.id, {
-      ...formData,
-      share_token: uuidv4(),
-    })
+    const { data: album, error } = await createAlbum({ ...data, owner_id: user.id })
     setCreating(false)
     if (error) { toast('Erro ao criar álbum 😢', 'error'); return }
     setShowModal(false)
@@ -42,76 +34,63 @@ export default function Dashboard() {
     navigate(`/album/${album.id}`)
   }
 
-  async function handleDelete(albumId, e) {
-    e.stopPropagation()
-    e.preventDefault()
-    if (!confirm('Deletar esse álbum? Essa ação é irreversível 😢')) return
-    const { error } = await deleteAlbum(albumId)
-    if (!error) {
-      setAlbums(prev => prev.filter(a => a.id !== albumId))
-      toast('Álbum deletado', 'default')
-    } else {
-      toast('Erro ao deletar', 'error')
-    }
-  }
-
-  async function handleSignOut() {
-    await signOut()
-    navigate('/')
+  async function handleDelete(id, e) {
+    e.preventDefault(); e.stopPropagation()
+    if (!confirm('Deletar este álbum?')) return
+    const { error } = await deleteAlbum(id)
+    if (!error) { setAlbums(p => p.filter(a => a.id !== id)); toast('Deletado!') }
+    else toast('Erro ao deletar', 'error')
   }
 
   return (
-    <div className={styles.page + ' bg-dots'}>
-      <header className={styles.header}>
-        <div className={styles.logo}>🍍 Pineapple Moments</div>
-        <div className={styles.headerRight}>
-          <span className={styles.email}>{user?.email}</span>
-          <button className="btn btn-ghost" onClick={handleSignOut} style={{fontSize:'13px',padding:'8px 16px'}}>
-            Sair
-          </button>
+    <div style={{ minHeight:'100vh', background:'var(--cream)' }}>
+      {/* Header */}
+      <header style={{ background:'white', borderBottom:'2px solid rgba(27,58,31,0.07)', padding:'14px 24px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:100 }}>
+        <span style={{ fontFamily:'var(--font-title)', fontSize:18, color:'var(--green)' }}>🍍 Pineapple Moments</span>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <span style={{ fontSize:12, color:'rgba(27,58,31,0.45)', fontFamily:'var(--font-cute)' }}>{user?.email}</span>
+          <button className="btn btn-ghost" onClick={() => signOut().then(() => navigate('/'))} style={{ fontSize:13, padding:'7px 14px' }}>Sair</button>
         </div>
       </header>
 
-      <main className={styles.main}>
-        <div className={styles.topRow}>
+      <main style={{ maxWidth:1000, margin:'0 auto', padding:'36px 20px 80px' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:36, flexWrap:'wrap', gap:14 }}>
           <div>
-            <h1 className={styles.title}>Meus Álbuns ✨</h1>
-            <p className={styles.sub}>Suas memórias mais fofas, todas aqui 💕</p>
+            <h1 style={{ fontFamily:'var(--font-title)', fontSize:28, color:'var(--dark)' }}>Meus Álbuns ✨</h1>
+            <p style={{ color:'rgba(27,58,31,0.55)', fontFamily:'var(--font-cute)', marginTop:4, fontSize:14 }}>Suas memórias mais fofas, todas aqui 💛</p>
           </div>
-          <button className="btn btn-primary" onClick={()=>setShowModal(true)}>
-            + Novo Álbum
-          </button>
+          <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Novo Álbum</button>
         </div>
 
-        {loading ? (
-          <div className="loader" />
-        ) : albums.length === 0 ? (
-          <div className={styles.empty}>
-            <div className={styles.emptyIcon}>📷</div>
-            <h2>Nenhum álbum ainda!</h2>
-            <p>Crie seu primeiro álbum e comece a guardar memórias fofas 🌸</p>
-            <button className="btn btn-primary" onClick={()=>setShowModal(true)}>
-              Criar meu primeiro álbum 🍍
-            </button>
+        {loading ? <div className="loader" /> : albums.length === 0 ? (
+          <div style={{ textAlign:'center', padding:'80px 24px' }}>
+            <div style={{ fontSize:64, marginBottom:16 }}>📷</div>
+            <h2 style={{ fontFamily:'var(--font-title)', fontSize:22, marginBottom:8 }}>Nenhum álbum ainda!</h2>
+            <p style={{ color:'rgba(27,58,31,0.55)', fontFamily:'var(--font-cute)', marginBottom:24 }}>Crie seu primeiro álbum e guarde memórias fofas 🌸</p>
+            <button className="btn btn-primary" onClick={() => setShowModal(true)}>Criar meu primeiro álbum 🍍</button>
           </div>
         ) : (
-          <div className={styles.grid}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:20 }}>
             {albums.map((album, i) => (
-              <Link key={album.id} to={`/album/${album.id}`} className={styles.albumLink} style={{animationDelay:`${i*0.08}s`}}>
-                <div className={styles.albumCard}>
-                  <AlbumCover album={album} small />
-                  <div className={styles.albumInfo}>
-                    <h3 className={styles.albumName}>{album.name}</h3>
-                    {album.description && <p className={styles.albumDesc}>{album.description}</p>}
-                    <div className={styles.albumMeta}>
-                      {album.share_mode === 'edit' ? '✏️ Colaborativo' : '👁️ Somente leitura'}
-                    </div>
+              <Link key={album.id} to={`/album/${album.id}`} style={{ textDecoration:'none', animation:'fadeIn 0.4s ease forwards', opacity:0, animationDelay:`${i*0.07}s` }}>
+                <div style={{ background:'white', borderRadius:'var(--radius)', overflow:'hidden', boxShadow:'var(--shadow)', transition:'transform 0.2s,box-shadow 0.2s', position:'relative' }}
+                  onMouseOver={e => { e.currentTarget.style.transform='translateY(-4px)'; e.currentTarget.style.boxShadow='var(--shadow-lg)' }}
+                  onMouseOut={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow='var(--shadow)' }}>
+                  <AlbumCover album={album} size={200} />
+                  <div style={{ padding:'12px 14px' }}>
+                    <h3 style={{ fontFamily:'var(--font-title)', fontSize:14, color:'var(--dark)', marginBottom:3 }}>{album.name}</h3>
+                    {album.description && <p style={{ fontSize:11, color:'rgba(27,58,31,0.55)', fontFamily:'var(--font-cute)', overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' }}>{album.description}</p>}
+                    <p style={{ fontSize:10, color:'rgba(27,58,31,0.4)', marginTop:5 }}>{album.share_mode==='edit'?'✏️ Colaborativo':'👁️ Somente leitura'}</p>
                   </div>
-                  <button
-                    className={styles.deleteBtn}
-                    onClick={(e)=>handleDelete(album.id, e)}
-                    title="Deletar álbum"
-                  >🗑️</button>
+                  <button onClick={e => handleDelete(album.id, e)}
+                    style={{ position:'absolute', top:8, right:8, background:'white', border:'none', borderRadius:'50%', width:30, height:30, fontSize:13, cursor:'pointer', opacity:0, transition:'opacity 0.2s', boxShadow:'var(--shadow)' }}
+                    onMouseOver={e => e.stopPropagation()}
+                    ref={el => {
+                      if (el) {
+                        el.parentElement.addEventListener('mouseenter', () => el.style.opacity = '1')
+                        el.parentElement.addEventListener('mouseleave', () => el.style.opacity = '0')
+                      }
+                    }}>🗑️</button>
                 </div>
               </Link>
             ))}
@@ -119,13 +98,7 @@ export default function Dashboard() {
         )}
       </main>
 
-      {showModal && (
-        <NewAlbumModal
-          onClose={()=>setShowModal(false)}
-          onCreate={handleCreate}
-          loading={creating}
-        />
-      )}
+      {showModal && <NewAlbumModal onClose={() => setShowModal(false)} onCreate={handleCreate} loading={creating} />}
     </div>
   )
 }

@@ -2,303 +2,234 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { uploadPhoto } from '../lib/supabase'
 import { useToast } from '../hooks/useToast'
 import { v4 as uuidv4 } from 'uuid'
-import styles from './PageCanvas.module.css'
 
-const STICKERS = ['🌸','⭐','🦋','🍓','🌈','💖','🌙','🍦','🎀','✨','🌺','🍭',
-  '🐱','🐰','🌻','🍉','🍒','🎵','🎨','🌷','🦄','🍋','🎪','💫','🌊','🍄',
-  '🎠','🧸','🍰','🌼','🦩','🎡','🍩','🌟','💝','🎈','🐝','🌿','🍀','🦋']
-
-const FONTS = [
-  { name: 'Pacifico', label: 'Fofa' },
-  { name: 'Caveat', label: 'Manuscrita' },
-  { name: 'Dancing Script', label: 'Script' },
-  { name: 'Quicksand', label: 'Moderna' },
-  { name: 'Nunito', label: 'Simples' },
-]
-
-const BG_COLORS = [
-  '#FFFFFF', '#FFF9F0', '#FFF0F7', '#F0FFF4', '#F0F7FF',
-  '#FFE4E1', '#E8F5E9', '#FFF3E0', '#F3E5F5', '#E0F2F1',
-]
+const STICKERS = ['🌸','⭐','🦋','🍓','🌈','💖','🌙','🍦','🎀','✨','🌺','🍭','🐱','🐰','🌻','🍉','🍒','🎵','🎨','🌷','🦄','🍋','💫','🌊','🍄','🧸','🍰','🌼','🍩','🌟','💝','🎈','🐝','🍀','🎪','🦊']
+const FONTS = [{ name:'Pacifico', label:'Fofa' }, { name:'Caveat', label:'Manuscrita' }, { name:'Dancing Script', label:'Script' }, { name:'Quicksand', label:'Moderna' }, { name:'Nunito', label:'Normal' }]
+const BG_COLORS = ['#FFFFFF','#F7FAF0','#FFFDE7','#E8F5E9','#E3F2FD','#FCE4EC','#F3E5F5','#FFF8E1','#E0F2F1','#FAFAFA']
 
 export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId }) {
   const toast = useToast()
   const [elements, setElements] = useState(page.elements || [])
   const [selected, setSelected] = useState(null)
   const [bgColor, setBgColor] = useState(page.bgColor || '#FFFFFF')
-  const [tool, setTool] = useState('select') // select, text, sticker
-  const [dragging, setDragging] = useState(null)
-  const [resizing, setResizing] = useState(null)
+  const [panel, setPanel] = useState('none') // none | stickers | props
   const canvasRef = useRef(null)
   const fileRef = useRef(null)
-  const dragOffset = useRef({ x: 0, y: 0 })
-  const isDirty = useRef(false)
+  const dragRef = useRef(null)
+  const dirty = useRef(false)
 
-  // Auto-save after changes
+  // Auto-save
   useEffect(() => {
-    if (!isDirty.current) return
-    const timer = setTimeout(() => {
-      onSave(elements)
-      isDirty.current = false
-    }, 1500)
-    return () => clearTimeout(timer)
+    if (!dirty.current) return
+    const t = setTimeout(() => { onSave(elements); dirty.current = false }, 1500)
+    return () => clearTimeout(t)
   }, [elements])
 
-  const mark = () => { isDirty.current = true }
+  const mark = () => { dirty.current = true }
+  const upd = (id, u) => { setElements(p => p.map(e => e.id===id ? {...e,...u} : e)); mark() }
+  const add = (el) => { setElements(p => [...p, el]); setSelected(el.id); mark() }
+  const del = () => { if (!selected) return; setElements(p => p.filter(e => e.id!==selected)); setSelected(null); mark() }
 
-  const updateEl = (id, updates) => {
-    setElements(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e))
-    mark()
+  // Drag
+  const getXY = (e) => {
+    if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    return { x: e.clientX, y: e.clientY }
   }
 
-  const addElement = (el) => {
-    setElements(prev => [...prev, el])
-    setSelected(el.id)
-    mark()
-  }
-
-  const deleteSelected = () => {
-    if (!selected) return
-    setElements(prev => prev.filter(e => e.id !== selected))
-    setSelected(null)
-    mark()
-  }
-
-  // Drag handlers
   const startDrag = (e, id) => {
     if (!isOwner) return
     e.stopPropagation()
     const el = elements.find(el => el.id === id)
     if (!el) return
     const rect = canvasRef.current.getBoundingClientRect()
-    dragOffset.current = {
-      x: e.clientX - rect.left - el.x,
-      y: e.clientY - rect.top - el.y,
-    }
-    setDragging(id)
+    const { x, y } = getXY(e)
+    dragRef.current = { id, ox: x - rect.left - el.x, oy: y - rect.top - el.y }
     setSelected(id)
+    setPanel('none')
   }
 
-  const onMouseMove = useCallback((e) => {
-    if (!dragging || !canvasRef.current) return
+  const onMove = useCallback((e) => {
+    if (!dragRef.current || !canvasRef.current) return
+    if (e.cancelable) e.preventDefault()
     const rect = canvasRef.current.getBoundingClientRect()
-    const x = Math.max(0, Math.min(e.clientX - rect.left - dragOffset.current.x, rect.width - 20))
-    const y = Math.max(0, Math.min(e.clientY - rect.top - dragOffset.current.y, rect.height - 20))
-    updateEl(dragging, { x, y })
-  }, [dragging])
+    const { x, y } = getXY(e)
+    const nx = Math.max(0, Math.min(x - rect.left - dragRef.current.ox, rect.width - 10))
+    const ny = Math.max(0, Math.min(y - rect.top - dragRef.current.oy, rect.height - 10))
+    upd(dragRef.current.id, { x: nx, y: ny })
+  }, [elements])
 
-  const onMouseUp = useCallback(() => {
-    setDragging(null)
-  }, [])
+  const onEnd = useCallback(() => { dragRef.current = null }, [])
 
   useEffect(() => {
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onEnd)
+    window.addEventListener('touchmove', onMove, { passive: false })
+    window.addEventListener('touchend', onEnd)
     return () => {
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onEnd)
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', onEnd)
     }
-  }, [onMouseMove, onMouseUp])
+  }, [onMove, onEnd])
 
-  // Add text
   const addText = () => {
-    addElement({
-      id: uuidv4(), type: 'text',
-      x: 80, y: 80,
-      text: 'Escreva aqui 💕',
-      font: 'Caveat',
-      fontSize: 28,
-      color: '#5C3D2E',
-      width: 200,
-    })
-    setTool('select')
+    add({ id:uuidv4(), type:'text', x:60, y:60, text:'Escreva aqui 💕', font:'Caveat', fontSize:28, color:'#1B3A1F', width:200 })
   }
 
-  // Add sticker
   const addSticker = (emoji) => {
-    addElement({
-      id: uuidv4(), type: 'sticker',
-      x: 100 + Math.random() * 200,
-      y: 100 + Math.random() * 200,
-      emoji,
-      fontSize: 48,
-    })
+    add({ id:uuidv4(), type:'sticker', x:80+Math.random()*160, y:60+Math.random()*160, emoji, fontSize:52 })
+    setPanel('none')
   }
 
-  // Upload photo
-  const handlePhotoUpload = async (e) => {
+  const handleUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) { toast('Foto muito grande (máx 5MB)', 'error'); return }
+    if (file.size > 5*1024*1024) { toast('Foto muito grande! Máx 5MB', 'error'); return }
     toast('Enviando foto... 📸')
     const { url, error } = await uploadPhoto(file, userId)
-    if (error || !url) { toast('Erro ao enviar foto 😢', 'error'); return }
-    addElement({
-      id: uuidv4(), type: 'photo',
-      x: 60, y: 60,
-      url,
-      width: 200,
-      height: 200,
-      borderRadius: 8,
-      rotation: 0,
-    })
+    if (error || !url) { toast('Erro ao enviar 😢', 'error'); return }
+    add({ id:uuidv4(), type:'photo', x:40, y:40, url, width:180, height:180, radius:8, rotation:0 })
     toast('Foto adicionada! 📷', 'success')
     e.target.value = ''
   }
 
   const selEl = elements.find(e => e.id === selected)
 
+  const btnStyle = (active) => ({
+    width:40, height:40, border:`2px solid ${active?'var(--green)':'rgba(27,58,31,0.12)'}`,
+    borderRadius:10, background: active?'var(--green-light)':'white',
+    fontSize:15, fontWeight:700, fontFamily:'var(--font-body)',
+    cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0
+  })
+
   return (
-    <div className={styles.wrap}>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10, width:'100%' }}>
+
       {/* Toolbar */}
       {isOwner && (
-        <div className={styles.toolbar}>
-          <div className={styles.toolGroup}>
-            <button className={`${styles.tool} ${tool==='select'?styles.active:''}`} onClick={()=>setTool('select')} title="Selecionar">☝️</button>
-            <button className={styles.tool} onClick={addText} title="Texto">T</button>
-            <button className={styles.tool} onClick={()=>setTool('sticker')} title="Adesivos">🌸</button>
-            <button className={styles.tool} onClick={()=>fileRef.current?.click()} title="Foto">📷</button>
-            <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handlePhotoUpload} />
+        <div style={{ background:'white', borderRadius:16, padding:'8px 12px', display:'flex', alignItems:'center', gap:8, boxShadow:'var(--shadow)', flexWrap:'wrap', justifyContent:'center', width:'100%', maxWidth:720 }}>
+          <div style={{ display:'flex', gap:5 }}>
+            <button style={btnStyle(false)} onClick={addText} title="Texto">T</button>
+            <button style={btnStyle(panel==='stickers')} onClick={() => setPanel(panel==='stickers'?'none':'stickers')} title="Adesivos">🌸</button>
+            <button style={btnStyle(false)} onClick={() => fileRef.current?.click()} title="Foto">📷</button>
+            <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleUpload} />
           </div>
 
-          <div className={styles.bgColors}>
+          <div style={{ display:'flex', gap:4, flexWrap:'wrap', justifyContent:'center' }}>
             {BG_COLORS.map(c => (
-              <button
-                key={c}
-                className={`${styles.bgBtn} ${bgColor===c?styles.bgActive:''}`}
-                style={{ background: c }}
-                onClick={() => { setBgColor(c); mark() }}
-              />
+              <button key={c} onClick={() => { setBgColor(c); mark() }}
+                style={{ width:20, height:20, borderRadius:'50%', background:c, border:`2px solid ${bgColor===c?'var(--green)':'rgba(27,58,31,0.15)'}`, cursor:'pointer', transform: bgColor===c?'scale(1.2)':'scale(1)', transition:'transform 0.1s', flexShrink:0 }} />
             ))}
           </div>
 
-          <div className={styles.toolGroup}>
-            {selected && <button className={`${styles.tool} ${styles.danger}`} onClick={deleteSelected} title="Deletar elemento">🗑️</button>}
-            {onDeletePage && <button className={`${styles.tool} ${styles.danger}`} onClick={onDeletePage} title="Deletar página">📄🗑️</button>}
-            <button className={`${styles.tool} ${styles.save}`} onClick={()=>{onSave(elements);toast('Salvo! ✅','success')}} title="Salvar agora">💾</button>
+          <div style={{ display:'flex', gap:5 }}>
+            {selected && (
+              <>
+                <button style={btnStyle(panel==='props')} onClick={() => setPanel(panel==='props'?'none':'props')} title="Editar">⚙️</button>
+                <button style={{...btnStyle(false), borderColor:'#e53935'}} onClick={del} title="Deletar">🗑️</button>
+              </>
+            )}
+            {onDeletePage && <button style={{...btnStyle(false), borderColor:'#e53935'}} onClick={onDeletePage} title="Deletar página">📄🗑️</button>}
+            <button style={{...btnStyle(false), borderColor:'var(--green)'}} onClick={() => { onSave(elements); toast('Salvo! ✅','success') }} title="Salvar">💾</button>
           </div>
         </div>
       )}
 
       {/* Sticker panel */}
-      {tool === 'sticker' && isOwner && (
-        <div className={styles.stickerPanel}>
-          <div className={styles.stickerGrid}>
+      {panel === 'stickers' && isOwner && (
+        <div style={{ background:'white', borderRadius:14, padding:12, boxShadow:'var(--shadow)', width:'100%', maxWidth:720 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(36px,1fr))', gap:4 }}>
             {STICKERS.map(s => (
-              <button key={s} className={styles.stickerBtn} onClick={()=>addSticker(s)}>{s}</button>
+              <button key={s} onClick={() => addSticker(s)}
+                style={{ fontSize:22, background:'none', border:'2px solid transparent', borderRadius:8, cursor:'pointer', padding:3, lineHeight:1, transition:'all 0.1s' }}
+                onMouseOver={e => { e.currentTarget.style.background='var(--green-light)'; e.currentTarget.style.transform='scale(1.2)' }}
+                onMouseOut={e => { e.currentTarget.style.background='none'; e.currentTarget.style.transform='scale(1)' }}>
+                {s}
+              </button>
             ))}
           </div>
-          <button className="btn btn-ghost" style={{fontSize:'12px',padding:'6px 12px',marginTop:'8px'}} onClick={()=>setTool('select')}>Fechar</button>
         </div>
       )}
 
-      {/* Properties panel for selected element */}
-      {selected && selEl && isOwner && (
-        <div className={styles.propsPanel}>
+      {/* Props panel */}
+      {panel === 'props' && selEl && isOwner && (
+        <div style={{ background:'white', borderRadius:14, padding:'12px 16px', boxShadow:'var(--shadow)', width:'100%', maxWidth:720, display:'flex', gap:16, flexWrap:'wrap', alignItems:'flex-start' }}>
           {selEl.type === 'text' && (
             <>
-              <label>Texto</label>
-              <textarea
-                className={styles.propTextarea}
-                value={selEl.text}
-                onChange={e=>updateEl(selected,{text:e.target.value})}
-              />
-              <label>Fonte</label>
-              <div className={styles.fontRow}>
-                {FONTS.map(f => (
-                  <button
-                    key={f.name}
-                    className={`${styles.fontBtn} ${selEl.font===f.name?styles.fontActive:''}`}
-                    style={{fontFamily:f.name}}
-                    onClick={()=>updateEl(selected,{font:f.name})}
-                  >{f.label}</button>
-                ))}
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:'rgba(27,58,31,0.5)', display:'block', marginBottom:4 }}>Texto</label>
+                <textarea value={selEl.text} onChange={e=>upd(selected,{text:e.target.value})}
+                  style={{ border:'2px solid rgba(27,58,31,0.15)', borderRadius:8, padding:'6px 8px', fontSize:13, fontFamily:'var(--font-body)', width:160, height:52, resize:'none', outline:'none', color:'var(--dark)' }} />
               </div>
-              <label>Tamanho: {selEl.fontSize}px</label>
-              <input type="range" min={12} max={80} value={selEl.fontSize} onChange={e=>updateEl(selected,{fontSize:+e.target.value})} className={styles.slider} />
-              <label>Cor</label>
-              <input type="color" value={selEl.color} onChange={e=>updateEl(selected,{color:e.target.value})} className={styles.colorPicker} />
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:'rgba(27,58,31,0.5)', display:'block', marginBottom:4 }}>Fonte</label>
+                <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                  {FONTS.map(f => (
+                    <button key={f.name} onClick={() => upd(selected,{font:f.name})}
+                      style={{ padding:'4px 8px', border:`2px solid ${selEl.font===f.name?'var(--green)':'rgba(27,58,31,0.15)'}`, borderRadius:6, background: selEl.font===f.name?'var(--green-light)':'white', cursor:'pointer', fontFamily:f.name, fontSize:12, color:'var(--dark)' }}>
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:'rgba(27,58,31,0.5)', display:'block', marginBottom:4 }}>Tamanho: {selEl.fontSize}px</label>
+                <input type="range" min={12} max={80} value={selEl.fontSize} onChange={e=>upd(selected,{fontSize:+e.target.value})} style={{ width:100 }} />
+              </div>
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:'rgba(27,58,31,0.5)', display:'block', marginBottom:4 }}>Cor</label>
+                <input type="color" value={selEl.color} onChange={e=>upd(selected,{color:e.target.value})} style={{ width:36, height:36, borderRadius:8, border:'none', cursor:'pointer', padding:2 }} />
+              </div>
             </>
           )}
           {selEl.type === 'photo' && (
             <>
-              <label>Largura: {selEl.width}px</label>
-              <input type="range" min={60} max={500} value={selEl.width} onChange={e=>updateEl(selected,{width:+e.target.value})} className={styles.slider} />
-              <label>Altura: {selEl.height}px</label>
-              <input type="range" min={60} max={500} value={selEl.height} onChange={e=>updateEl(selected,{height:+e.target.value})} className={styles.slider} />
-              <label>Borda arredondada: {selEl.borderRadius}px</label>
-              <input type="range" min={0} max={120} value={selEl.borderRadius} onChange={e=>updateEl(selected,{borderRadius:+e.target.value})} className={styles.slider} />
-              <label>Rotação: {selEl.rotation || 0}°</label>
-              <input type="range" min={-45} max={45} value={selEl.rotation||0} onChange={e=>updateEl(selected,{rotation:+e.target.value})} className={styles.slider} />
+              {[['Largura',selEl.width,'width',60,400],['Altura',selEl.height,'height',60,400],['Borda',selEl.radius,'radius',0,120],['Rotação',selEl.rotation||0,'rotation',-45,45]].map(([lbl,val,key,min,max]) => (
+                <div key={key}>
+                  <label style={{ fontSize:11, fontWeight:700, color:'rgba(27,58,31,0.5)', display:'block', marginBottom:4 }}>{lbl}: {val}{key==='rotation'?'°':'px'}</label>
+                  <input type="range" min={min} max={max} value={val} onChange={e=>upd(selected,{[key]:+e.target.value})} style={{ width:90 }} />
+                </div>
+              ))}
             </>
           )}
           {selEl.type === 'sticker' && (
-            <>
-              <label>Tamanho: {selEl.fontSize}px</label>
-              <input type="range" min={24} max={120} value={selEl.fontSize} onChange={e=>updateEl(selected,{fontSize:+e.target.value})} className={styles.slider} />
-            </>
+            <div>
+              <label style={{ fontSize:11, fontWeight:700, color:'rgba(27,58,31,0.5)', display:'block', marginBottom:4 }}>Tamanho: {selEl.fontSize}px</label>
+              <input type="range" min={24} max={120} value={selEl.fontSize} onChange={e=>upd(selected,{fontSize:+e.target.value})} style={{ width:100 }} />
+            </div>
           )}
         </div>
       )}
 
-      {/* The page canvas */}
-      <div
-        ref={canvasRef}
-        className={styles.canvas}
-        style={{ background: bgColor }}
-        onClick={()=>setSelected(null)}
-      >
+      {/* Canvas */}
+      <div ref={canvasRef} style={{ width:'min(720px,100%)', aspectRatio:'7/5', borderRadius:16, background:bgColor, position:'relative', overflow:'hidden', boxShadow:'0 8px 40px rgba(27,58,31,0.15)', touchAction:'none', flexShrink:0 }}
+        onClick={() => { setSelected(null); setPanel('none') }}>
         {elements.map(el => (
-          <div
-            key={el.id}
-            className={`${styles.element} ${selected===el.id?styles.selected:''} ${isOwner?styles.draggable:''}`}
-            style={{ left: el.x, top: el.y, position: 'absolute' }}
-            onMouseDown={e=>startDrag(e,el.id)}
-            onClick={e=>{e.stopPropagation();setSelected(el.id)}}
-          >
-            {el.type === 'text' && (
-              <div
-                style={{
-                  fontFamily: el.font || 'Caveat',
-                  fontSize: el.fontSize || 28,
-                  color: el.color || '#5C3D2E',
-                  width: el.width || 200,
-                  wordBreak: 'break-word',
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: 1.4,
-                  cursor: isOwner ? 'move' : 'default',
-                  userSelect: 'none',
-                }}
-              >{el.text}</div>
+          <div key={el.id} style={{ position:'absolute', left:el.x, top:el.y, cursor:isOwner?'move':'default', userSelect:'none' }}
+            onMouseDown={e => startDrag(e, el.id)}
+            onTouchStart={e => startDrag(e, el.id)}
+            onClick={e => { e.stopPropagation(); setSelected(el.id) }}>
+            {selected === el.id && (
+              <div style={{ position:'absolute', inset:-4, border:'2px dashed var(--green)', borderRadius:6, pointerEvents:'none', zIndex:10 }} />
             )}
-            {el.type === 'sticker' && (
-              <div style={{ fontSize: el.fontSize || 48, lineHeight: 1, userSelect: 'none', cursor: isOwner ? 'move' : 'default' }}>
-                {el.emoji}
+            {el.type === 'text' && (
+              <div style={{ fontFamily:el.font||'Caveat', fontSize:el.fontSize||28, color:el.color||'#1B3A1F', width:el.width||200, wordBreak:'break-word', whiteSpace:'pre-wrap', lineHeight:1.4 }}>
+                {el.text}
               </div>
             )}
+            {el.type === 'sticker' && (
+              <div style={{ fontSize:el.fontSize||52, lineHeight:1 }}>{el.emoji}</div>
+            )}
             {el.type === 'photo' && (
-              <img
-                src={el.url}
-                alt=""
-                style={{
-                  width: el.width,
-                  height: el.height,
-                  borderRadius: el.borderRadius || 8,
-                  objectFit: 'cover',
-                  transform: `rotate(${el.rotation||0}deg)`,
-                  display: 'block',
-                  userSelect: 'none',
-                  pointerEvents: 'none',
-                }}
-                draggable={false}
-              />
+              <img src={el.url} alt="" draggable={false} style={{ width:el.width, height:el.height, borderRadius:el.radius||8, objectFit:'cover', transform:`rotate(${el.rotation||0}deg)`, display:'block', pointerEvents:'none' }} />
             )}
           </div>
         ))}
         {elements.length === 0 && isOwner && (
-          <div className={styles.emptyHint}>
-            <span>📝</span>
-            <p>Clique nas ferramentas acima para adicionar fotos, textos e adesivos!</p>
+          <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', textAlign:'center', color:'rgba(27,58,31,0.25)', pointerEvents:'none' }}>
+            <div style={{ fontSize:36 }}>📝</div>
+            <p style={{ fontFamily:'var(--font-cute)', fontSize:13, marginTop:8 }}>Use as ferramentas acima para criar sua página!</p>
           </div>
         )}
       </div>

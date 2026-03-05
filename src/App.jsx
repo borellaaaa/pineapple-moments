@@ -7,15 +7,15 @@ import Dashboard from './pages/Dashboard'
 import AlbumEditor from './pages/AlbumEditor'
 import SharedAlbum from './pages/SharedAlbum'
 
-function ProtectedRoute({ children }) {
+function Protected({ children }) {
   const { user, loading } = useAuth()
-  if (loading) return <div style={{display:'flex',justifyContent:'center',padding:'80px'}}><div className="loader"/></div>
+  if (loading) return <div className="loader" style={{marginTop:80}} />
   return user ? children : <Navigate to="/auth" replace />
 }
 
-function PublicRoute({ children }) {
+function Public({ children }) {
   const { user, loading } = useAuth()
-  if (loading) return <div style={{display:'flex',justifyContent:'center',padding:'80px'}}><div className="loader"/></div>
+  if (loading) return <div className="loader" style={{marginTop:80}} />
   return user ? <Navigate to="/dashboard" replace /> : children
 }
 
@@ -25,10 +25,10 @@ export default function App() {
       <ToastProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
-            <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/album/:albumId" element={<ProtectedRoute><AlbumEditor /></ProtectedRoute>} />
+            <Route path="/" element={<Public><Landing /></Public>} />
+            <Route path="/auth" element={<Public><Auth /></Public>} />
+            <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+            <Route path="/album/:albumId" element={<Protected><AlbumEditor /></Protected>} />
             <Route path="/shared/:token" element={<SharedAlbum />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
