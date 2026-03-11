@@ -5,10 +5,10 @@ const Ctx = createContext(null)
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
 
-  const toast = useCallback((msg, type = 'default') => {
+  const toast = useCallback((msg, type = 'default', duration = 3000) => {
     const id = Date.now()
     setToasts(p => [...p, { id, msg, type }])
-    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3000)
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), duration)
   }, [])
 
   return (

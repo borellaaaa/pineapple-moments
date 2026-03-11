@@ -6,16 +6,18 @@ import Auth from './pages/Auth'
 import Dashboard from './pages/Dashboard'
 import AlbumEditor from './pages/AlbumEditor'
 import SharedAlbum from './pages/SharedAlbum'
+import Profile from './pages/Profile'
+import Letters from './pages/Letters'
 
 function Protected({ children }) {
   const { user, loading } = useAuth()
-  if (loading) return <div className="loader" style={{marginTop:80}} />
+  if (loading) return <div className="loader" style={{ marginTop: 80 }} />
   return user ? children : <Navigate to="/auth" replace />
 }
 
 function Public({ children }) {
   const { user, loading } = useAuth()
-  if (loading) return <div className="loader" style={{marginTop:80}} />
+  if (loading) return <div className="loader" style={{ marginTop: 80 }} />
   return user ? <Navigate to="/dashboard" replace /> : children
 }
 
@@ -30,6 +32,8 @@ export default function App() {
             <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
             <Route path="/album/:albumId" element={<Protected><AlbumEditor /></Protected>} />
             <Route path="/shared/:token" element={<SharedAlbum />} />
+            <Route path="/profile" element={<Protected><Profile /></Protected>} />
+            <Route path="/letters" element={<Protected><Letters /></Protected>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
