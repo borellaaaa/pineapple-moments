@@ -89,11 +89,12 @@ export const getPages = (albumId) =>
 export const createPage = (albumId, pageNumber) =>
   supabase.from('pages').insert({ album_id: albumId, page_number: pageNumber, elements: [], bg_color: '#FFFFFF' }).select().single()
 
-// FIX: agora salva elements E bg_color juntos
-export const updatePage = (pageId, elements, bgColor) =>
+// FIX: salva elements, bg_color E svg_paths juntos
+export const updatePage = (pageId, elements, bgColor, svgPaths) =>
   supabase.from('pages').update({
     elements,
-    ...(bgColor !== undefined ? { bg_color: bgColor } : {})
+    ...(bgColor   !== undefined ? { bg_color:  bgColor   } : {}),
+    ...(svgPaths  !== undefined ? { svg_paths: svgPaths  } : {}),
   }).eq('id', pageId).select().single()
 
 export const deletePage = (pageId) =>
