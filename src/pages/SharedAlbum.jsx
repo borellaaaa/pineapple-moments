@@ -113,7 +113,7 @@ export default function SharedAlbum() {
               <p style={{ color: 'var(--dark-muted)', fontFamily: 'var(--font-cute)' }}>Em breve haverá memórias aqui 💛</p>
             </div>
           ) : page ? (
-            <PageCanvas key={page.id} page={page} isOwner={canEdit} onSave={(els) => updatePage(page.id, els)} onDeletePage={null} userId={user?.id} />
+            <PageCanvas key={page.id} page={page} isOwner={canEdit} onSave={(els, bg) => updatePage(page.id, els, bg)} onDeletePage={null} userId={user?.id} />
           ) : null}
         </main>
       </div>
