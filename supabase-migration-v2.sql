@@ -94,3 +94,9 @@ CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username);
 CREATE INDEX IF NOT EXISTS idx_saved_albums_user ON saved_albums(user_id);
 CREATE INDEX IF NOT EXISTS idx_letters_recipient ON letters(recipient_id);
 CREATE INDEX IF NOT EXISTS idx_letters_sender ON letters(sender_id);
+
+-- 9. Adicionar bg_color à tabela pages (caso não exista)
+DO $$ BEGIN
+  ALTER TABLE pages ADD COLUMN IF NOT EXISTS bg_color TEXT DEFAULT '#FFFFFF';
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
