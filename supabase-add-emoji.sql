@@ -1,2 +1,2 @@
--- Execute este SQL no Supabase SQL Editor para adicionar o emoji na capa
-ALTER TABLE albums ADD COLUMN IF NOT EXISTS cover_emoji TEXT DEFAULT '🍍';
+VITE_SUPABASE_URL=sua_url_do_supabase_aqui
+VITE_SUPABASE_ANON_KEY=sua_chave_anonima_do_supabase_aqui

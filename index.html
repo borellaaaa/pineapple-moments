@@ -1,16 +1,209 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pineapple Moments 🍍</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Nunito:wght@400;600;700;800&family=Caveat:wght@400;600;700&family=Dancing+Script:wght@400;600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍍</text></svg>" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.toolbar {
+  background: white;
+  border-radius: 16px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--shadow);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.toolGroup {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.tool {
+  width: 40px;
+  height: 40px;
+  border: 2px solid rgba(27,58,31,0.12);
+  border-radius: 10px;
+  background: white;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tool:hover { border-color: var(--green); background: #EAF5EA; }
+.tool.active { border-color: var(--green); background: #D4EDDA; }
+.tool.danger { border-color: #ff4757; }
+.tool.danger:hover { background: #fff0f1; }
+.tool.save { border-color: #2ed573; }
+.tool.save:hover { background: #f0fff4; }
+
+.bgColors {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.bgBtn {
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(27,58,31,0.15);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.bgBtn:hover { transform: scale(1.2); }
+.bgBtn.bgActive { border-color: var(--green); transform: scale(1.2); }
+
+.stickerPanel {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.stickerGrid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  max-width: 400px;
+}
+
+.stickerBtn {
+  font-size: 24px;
+  background: none;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  padding: 4px;
+  transition: all 0.15s;
+  line-height: 1;
+}
+.stickerBtn:hover { background: #EAF5EA; border-color: var(--green); transform: scale(1.2); }
+
+.propsPanel {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  width: 100%;
+  max-width: 700px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.propsPanel label {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(27,58,31,0.6);
+  white-space: nowrap;
+}
+
+.propTextarea {
+  border: 2px solid rgba(27,58,31,0.15);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 14px;
+  font-family: var(--font-body);
+  width: 180px;
+  height: 52px;
+  resize: none;
+  outline: none;
+}
+.propTextarea:focus { border-color: var(--green); }
+
+.fontRow {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.fontBtn {
+  padding: 4px 10px;
+  border: 2px solid rgba(27,58,31,0.15);
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+.fontBtn:hover { border-color: var(--green); }
+.fontBtn.fontActive { border-color: var(--green); background: #D4EDDA; }
+
+.slider {
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: #F5C800;
+  outline: none;
+  width: 100px;
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--green);
+  cursor: pointer;
+}
+
+.colorPicker {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.canvas {
+  width: 700px;
+  height: 500px;
+  border-radius: 20px;
+  box-shadow: 0 8px 40px rgba(27,58,31,0.18);
+  position: relative;
+  overflow: hidden;
+  cursor: default;
+  flex-shrink: 0;
+}
+
+.element {
+  cursor: default;
+}
+
+.element.draggable {
+  cursor: move;
+}
+
+.element.selected::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 2px dashed var(--green);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.emptyHint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: rgba(27,58,31,0.3);
+  pointer-events: none;
+}
+
+.emptyHint span { font-size: 40px; }
+.emptyHint p { font-family: var(--font-cute); font-size: 14px; margin-top: 8px; max-width: 200px; }
