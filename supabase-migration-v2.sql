@@ -100,3 +100,39 @@ DO $$ BEGIN
   ALTER TABLE pages ADD COLUMN IF NOT EXISTS bg_color TEXT DEFAULT '#FFFFFF';
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
+
+-- 10. Coluna svg_paths nas páginas para salvar desenhos
+DO $$ BEGIN
+  ALTER TABLE pages ADD COLUMN IF NOT EXISTS svg_paths JSONB DEFAULT '[]'::jsonb;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- 11. Função para deletar conta completamente (chama via RPC do client)
+-- Essa função roda com SECURITY DEFINER (service_role) então consegue
+-- deletar o usuário de auth.users, o que o client SDK não pode fazer.
+CREATE OR REPLACE FUNCTION delete_user_account()
+RETURNS void AS $$
+DECLARE
+  uid UUID := auth.uid();
+  album_ids UUID[];
+BEGIN
+  -- Cartinhas
+  DELETE FROM letters WHERE sender_id = uid OR recipient_id = uid;
+  -- Álbuns salvos
+  DELETE FROM saved_albums WHERE user_id = uid;
+  -- Páginas dos álbuns do usuário
+  SELECT ARRAY(SELECT id FROM albums WHERE owner_id = uid) INTO album_ids;
+  IF array_length(album_ids, 1) > 0 THEN
+    DELETE FROM pages WHERE album_id = ANY(album_ids);
+  END IF;
+  -- Álbuns
+  DELETE FROM albums WHERE owner_id = uid;
+  -- Perfil (cascade)
+  DELETE FROM profiles WHERE id = uid;
+  -- Usuário auth (requer SECURITY DEFINER)
+  DELETE FROM auth.users WHERE id = uid;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Permissão para usuários autenticados chamarem
+GRANT EXECUTE ON FUNCTION delete_user_account() TO authenticated;

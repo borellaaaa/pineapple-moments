@@ -36,11 +36,11 @@ export default function AlbumEditor() {
     setPages(p => [...p, data]); setCur(pages.length); toast('Página adicionada! 📄', 'success')
   }
 
-  async function savePage(elements, bgColor) {
+  async function savePage(elements, bgColor, svgPaths) {
     const page = pages[cur]
     if (!page) return
-    const { data } = await updatePage(page.id, elements, bgColor)
-    if (data) setPages(p => p.map((pg, i) => i === cur ? { ...pg, elements, bg_color: bgColor } : pg))
+    const { data } = await updatePage(page.id, elements, bgColor, svgPaths)
+    if (data) setPages(p => p.map((pg, i) => i === cur ? { ...pg, elements, bg_color: bgColor, svg_paths: svgPaths } : pg))
   }
 
   async function handleDeletePage() {

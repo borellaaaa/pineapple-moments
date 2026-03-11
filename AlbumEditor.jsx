@@ -1,60 +1,203 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { signInWithGoogle } from '../lib/supabase'
-import { useToast } from '../hooks/useToast'
+import { createClient } from '@supabase/supabase-js'
 
-export default function Auth() {
-  const [loading, setLoading] = useState(false)
-  const toast = useToast()
+export const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+)
 
-  const handleGoogle = async () => {
-    setLoading(true)
-    const { error } = await signInWithGoogle()
-    if (error) { toast('Erro ao entrar com Google 😢', 'error'); setLoading(false) }
+// ─── Auth ──────────────────────────────────────────────
+export const signInWithGoogle = () =>
+  supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin + '/dashboard' }
+  })
+
+export const signOut = () => supabase.auth.signOut()
+
+// ─── Profiles ─────────────────────────────────────────
+export const getProfile = (userId) =>
+  supabase.from('profiles').select('*').eq('id', userId).single()
+
+export const getProfileByUsername = (username) =>
+  supabase.from('profiles').select('*').eq('username', username.toLowerCase()).single()
+
+export const upsertProfile = (userId, data) =>
+  supabase.from('profiles').upsert({
+    id: userId,
+    ...data,
+    username: data.username ? data.username.toLowerCase() : undefined,
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'id' }).select().single()
+
+export const isUsernameAvailable = async (username, currentUserId) => {
+  const { data } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('username', username.toLowerCase())
+    .single()
+  if (!data) return true
+  return data.id === currentUserId
+}
+
+// ─── Albums ────────────────────────────────────────────
+export const getMyAlbums = (userId) =>
+  supabase.from('albums').select('*').eq('owner_id', userId).order('created_at', { ascending: false })
+
+export const getAlbumById = (id) =>
+  supabase.from('albums').select('*').eq('id', id).single()
+
+export const getAlbumByToken = (token) =>
+  supabase.from('albums').select('*').eq('share_token', token).single()
+
+export const createAlbum = (data) =>
+  supabase.from('albums').insert(data).select().single()
+
+export const updateAlbum = (id, data) =>
+  supabase.from('albums').update(data).eq('id', id).select().single()
+
+export const deleteAlbum = (id) =>
+  supabase.from('albums').delete().eq('id', id)
+
+// ─── Saved Albums ──────────────────────────────────────
+export const getSavedAlbums = (userId) =>
+  supabase
+    .from('saved_albums')
+    .select('album_id, saved_at, albums(*)')
+    .eq('user_id', userId)
+    .order('saved_at', { ascending: false })
+
+export const saveAlbum = (userId, albumId) =>
+  supabase.from('saved_albums').insert({ user_id: userId, album_id: albumId }).select().single()
+
+export const unsaveAlbum = (userId, albumId) =>
+  supabase.from('saved_albums').delete().eq('user_id', userId).eq('album_id', albumId)
+
+export const isAlbumSaved = async (userId, albumId) => {
+  const { data } = await supabase
+    .from('saved_albums')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('album_id', albumId)
+    .single()
+  return !!data
+}
+
+// ─── Pages ─────────────────────────────────────────────
+export const getPages = (albumId) =>
+  supabase.from('pages').select('*').eq('album_id', albumId).order('page_number')
+
+export const createPage = (albumId, pageNumber) =>
+  supabase.from('pages').insert({ album_id: albumId, page_number: pageNumber, elements: [], bg_color: '#FFFFFF' }).select().single()
+
+// FIX: salva elements, bg_color E svg_paths juntos
+export const updatePage = (pageId, elements, bgColor, svgPaths) =>
+  supabase.from('pages').update({
+    elements,
+    ...(bgColor   !== undefined ? { bg_color:  bgColor   } : {}),
+    ...(svgPaths  !== undefined ? { svg_paths: svgPaths  } : {}),
+  }).eq('id', pageId).select().single()
+
+export const deletePage = (pageId) =>
+  supabase.from('pages').delete().eq('id', pageId)
+
+// ─── Photos ────────────────────────────────────────────
+export const uploadPhoto = async (file, userId) => {
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  if (!allowed.includes(file.type)) return { url: null, error: new Error('Tipo de arquivo não permitido. Use JPG, PNG, WEBP ou GIF.') }
+  if (file.size > 5 * 1024 * 1024) return { url: null, error: new Error('Imagem muito grande! Máximo 5MB.') }
+
+  const ext = file.name.split('.').pop().toLowerCase()
+  const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  const path = `${userId}/${safeName}`
+
+  const { error } = await supabase.storage.from('album-photos').upload(path, file, {
+    cacheControl: '3600',
+    contentType: file.type
+  })
+  if (error) return { url: null, error }
+  const { data } = supabase.storage.from('album-photos').getPublicUrl(path)
+  return { url: data.publicUrl, error: null }
+}
+
+// ─── Letters ───────────────────────────────────────────
+export const sendLetter = async ({ senderId, recipientUsername, message, photoUrl }) => {
+  const { data: recipient, error: rErr } = await getProfileByUsername(recipientUsername)
+  if (rErr || !recipient) return { data: null, error: new Error('Usuário não encontrado 😢') }
+  if (recipient.id === senderId) return { data: null, error: new Error('Você não pode enviar carta para si mesmo!') }
+
+  return supabase.from('letters').insert({
+    sender_id: senderId,
+    recipient_username: recipientUsername.toLowerCase(),
+    recipient_id: recipient.id,
+    message: message.trim(),
+    photo_url: photoUrl || null
+  }).select().single()
+}
+
+// FIX: usar select simples sem join nomeado que pode falhar
+export const getInboxLetters = async (userId) => {
+  const { data, error } = await supabase
+    .from('letters')
+    .select('*')
+    .eq('recipient_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (error || !data) return { data: [], error }
+
+  // Busca perfis dos remetentes separadamente
+  const senderIds = [...new Set(data.map(l => l.sender_id).filter(Boolean))]
+  let senderMap = {}
+  if (senderIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, username, display_name, avatar_emoji')
+      .in('id', senderIds)
+    if (profiles) profiles.forEach(p => { senderMap[p.id] = p })
   }
 
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(160deg,#eaf5ea,#f7faf0,#fffde7)', padding: 24, position: 'relative' }}>
-      <Link to="/" style={{ position: 'absolute', top: 20, left: 20, color: 'var(--green)', fontWeight: 700, textDecoration: 'none', fontSize: 14 }}>← Voltar</Link>
+  return {
+    data: data.map(l => ({ ...l, sender: senderMap[l.sender_id] || null })),
+    error: null
+  }
+}
 
-      <div style={{ background: 'white', borderRadius: 28, padding: '48px 40px', maxWidth: 400, width: '100%', boxShadow: '0 24px 64px rgba(58,140,63,0.14)', textAlign: 'center', animation: 'pop 0.4s ease' }}>
-        <div style={{ fontSize: 60, display: 'block', marginBottom: 10, animation: 'float 3s ease-in-out infinite' }}>🍍</div>
-        <h1 style={{ fontFamily: 'var(--font-title)', color: 'var(--green)', fontSize: 26, marginBottom: 10 }}>Pineapple Moments</h1>
-        <p style={{ color: 'var(--dark-muted)', fontFamily: 'var(--font-cute)', fontSize: 15, marginBottom: 36, lineHeight: 1.6 }}>
-          Entre para criar e compartilhar seus álbuns mais fofos 💛
-        </p>
+export const getSentLetters = async (userId) => {
+  const { data, error } = await supabase
+    .from('letters')
+    .select('*')
+    .eq('sender_id', userId)
+    .order('created_at', { ascending: false })
 
-        <button
-          onClick={handleGoogle}
-          disabled={loading}
-          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '14px 22px', background: 'white', border: '2px solid var(--dark-faint)', borderRadius: 50, fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 15, color: 'var(--dark)', cursor: 'pointer', transition: 'all 0.2s', boxShadow: 'var(--shadow)' }}
-          onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--green)'; e.currentTarget.style.background = '#f0fff0' }}
-          onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--dark-faint)'; e.currentTarget.style.background = 'white' }}>
-          {loading ? (
-            <span className="loader loader-sm" style={{ margin: 0 }} />
-          ) : (
-            <svg width="20" height="20" viewBox="0 0 48 48">
-              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
-              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
-              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
-              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
-            </svg>
-          )}
-          {loading ? 'Entrando...' : 'Entrar com Google'}
-        </button>
+  if (error || !data) return { data: [], error }
 
-        <div style={{ margin: '24px 0', display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div style={{ flex: 1, borderTop: '2px solid var(--dark-faint)' }} />
-          <span style={{ fontSize: 11, color: 'var(--dark-muted)', fontWeight: 700 }}>Ambiente seguro</span>
-          <div style={{ flex: 1, borderTop: '2px solid var(--dark-faint)' }} />
-        </div>
+  // Busca perfis dos destinatários separadamente
+  const recipientIds = [...new Set(data.map(l => l.recipient_id).filter(Boolean))]
+  let recipientMap = {}
+  if (recipientIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, username, display_name, avatar_emoji')
+      .in('id', recipientIds)
+    if (profiles) profiles.forEach(p => { recipientMap[p.id] = p })
+  }
 
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', fontSize: 12, color: 'var(--dark-muted)', fontFamily: 'var(--font-cute)' }}>
-          {['🔒 Seguro', '🌸 Fofo', '✨ Grátis'].map(t => (
-            <span key={t} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{t}</span>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
+  return {
+    data: data.map(l => ({ ...l, recipient: recipientMap[l.recipient_id] || null })),
+    error: null
+  }
+}
+
+export const markLetterRead = (letterId) =>
+  supabase.from('letters').update({ is_read: true }).eq('id', letterId)
+
+export const deleteLetter = (letterId) =>
+  supabase.from('letters').delete().eq('id', letterId)
+
+export const getUnreadCount = async (userId) => {
+  const { count } = await supabase
+    .from('letters')
+    .select('id', { count: 'exact', head: true })
+    .eq('recipient_id', userId)
+    .eq('is_read', false)
+  return count || 0
 }

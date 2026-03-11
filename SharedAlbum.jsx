@@ -1,197 +1,181 @@
-import { useState, useEffect, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../hooks/useAuth'
-import { useToast } from '../hooks/useToast'
-import { getProfile, upsertProfile, isUsernameAvailable, signOut, supabase } from '../lib/supabase'
-
-const AVATARS = ['🍍','📸','💛','🌿','🌸','⭐','🦋','🍓','🌈','💖','🌙','🍦','🎀','✨','🌺','🍭','🐱','🐰','🌻','🍉','🎵','🎨','🌷','🦄','🍋','💫','🌊','🍄','🧸','🍰','🌼','🦩','🍩','🌟','💝','🎈','🐝','🍀','🎪','🦊']
-
-export default function Profile() {
-  const { user } = useAuth()
-  const navigate = useNavigate()
-  const toast = useToast()
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [form, setForm] = useState({ display_name: '', username: '', bio: '', avatar_emoji: '🍍' })
-  const [usernameStatus, setUsernameStatus] = useState(null) // null | 'checking' | 'ok' | 'taken' | 'invalid'
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [deleteInput, setDeleteInput] = useState('')
-  const [showAvatars, setShowAvatars] = useState(false)
-  const usernameTimer = useRef(null)
-
-  useEffect(() => {
-    getProfile(user.id).then(({ data }) => {
-      setProfile(data)
-      if (data) setForm({
-        display_name: data.display_name || '',
-        username: data.username || '',
-        bio: data.bio || '',
-        avatar_emoji: data.avatar_emoji || '🍍'
-      })
-      setLoading(false)
-    })
-  }, [user])
-
-  const handleUsernameChange = (val) => {
-    const clean = val.toLowerCase().replace(/[^a-z0-9_.]/g, '')
-    setForm(f => ({ ...f, username: clean }))
-    setUsernameStatus(null)
-    clearTimeout(usernameTimer.current)
-    if (!clean || clean.length < 3) return
-    if (!/^[a-z0-9][a-z0-9_.]{2,}$/.test(clean)) { setUsernameStatus('invalid'); return }
-    setUsernameStatus('checking')
-    usernameTimer.current = setTimeout(async () => {
-      const available = await isUsernameAvailable(clean, user.id)
-      setUsernameStatus(available ? 'ok' : 'taken')
-    }, 600)
-  }
-
-  const canSave = () => {
-    if (!form.display_name.trim()) return false
-    if (form.username && (usernameStatus === 'taken' || usernameStatus === 'invalid' || usernameStatus === 'checking')) return false
-    return true
-  }
-
-  const handleSave = async () => {
-    if (!canSave()) return
-    setSaving(true)
-    const { error } = await upsertProfile(user.id, {
-      display_name: form.display_name.trim(),
-      username: form.username.trim() || null,
-      bio: form.bio.trim(),
-      avatar_emoji: form.avatar_emoji
-    })
-    setSaving(false)
-    if (error) { toast('Erro ao salvar perfil 😢', 'error'); return }
-    toast('Perfil atualizado! ✨', 'success')
-    setUsernameStatus(null)
-  }
-
-  const handleDeleteAccount = async () => {
-    if (deleteInput !== 'DELETAR') return
-    setDeleting(true)
-    // Deleta dados do usuário (perfil, álbuns, cartas via CASCADE)
-    await supabase.from('profiles').delete().eq('id', user.id)
-    // Faz logout (a conta auth persiste mas dados são deletados)
-    await signOut()
-    navigate('/')
-    toast('Conta deletada. Até logo! 💔', 'info')
-  }
-
-  if (loading) return <div className="loader" style={{ marginTop: 80 }} />
-
-  const usernameHint = {
-    null: null,
-    checking: { color: 'var(--dark-muted)', text: 'Verificando...' },
-    ok: { color: 'var(--green)', text: '✅ Disponível!' },
-    taken: { color: 'var(--red)', text: '❌ Já está em uso' },
-    invalid: { color: 'var(--red)', text: '❌ Use letras, números, _ ou . (mín. 3)' }
-  }[usernameStatus]
-
-  return (
-    <div style={{ minHeight: '100vh', background: 'var(--cream)' }}>
-      {/* Header */}
-      <header style={{ background: 'white', borderBottom: '2px solid var(--dark-faint)', padding: '0 20px', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 12px rgba(27,58,31,0.06)' }}>
-        <div style={{ maxWidth: 640, margin: '0 auto', height: 60, display: 'flex', alignItems: 'center', gap: 16 }}>
-          <Link to="/dashboard" style={{ color: 'var(--green)', fontWeight: 700, textDecoration: 'none', fontSize: 13 }}>← Voltar</Link>
-          <span style={{ fontFamily: 'var(--font-title)', fontSize: 17, color: 'var(--dark)' }}>Meu Perfil</span>
-        </div>
-      </header>
-
-      <main style={{ maxWidth: 640, margin: '0 auto', padding: '32px 20px 80px' }}>
-        {/* Avatar */}
-        <div style={{ textAlign: 'center', marginBottom: 32, animation: 'fadeInUp 0.4s ease' }}>
-          <button onClick={() => setShowAvatars(!showAvatars)}
-            style={{ fontSize: 72, background: 'white', border: '4px solid var(--green-light)', borderRadius: '50%', width: 110, height: 110, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-md)', transition: 'all 0.2s', lineHeight: 1 }}
-            onMouseOver={e => e.currentTarget.style.transform = 'scale(1.07)'}
-            onMouseOut={e => e.currentTarget.style.transform = ''}>
-            {form.avatar_emoji}
-          </button>
-          <p style={{ marginTop: 8, fontSize: 12, color: 'var(--dark-muted)', fontFamily: 'var(--font-cute)' }}>Clique para trocar</p>
-          {showAvatars && (
-            <div style={{ background: 'white', border: '2px solid var(--dark-faint)', borderRadius: 'var(--radius)', padding: 12, marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(8,1fr)', gap: 4, animation: 'slideDown 0.2s ease', boxShadow: 'var(--shadow)' }}>
-              {AVATARS.map(a => (
-                <button key={a} onClick={() => { setForm(f => ({ ...f, avatar_emoji: a })); setShowAvatars(false) }}
-                  style={{ fontSize: 22, background: a === form.avatar_emoji ? 'var(--green-light)' : 'none', border: a === form.avatar_emoji ? '2px solid var(--green)' : '2px solid transparent', borderRadius: 8, cursor: 'pointer', padding: 4, transition: 'all 0.1s', lineHeight: 1 }}>
-                  {a}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Form Card */}
-        <div style={{ background: 'white', borderRadius: 'var(--radius)', padding: 28, boxShadow: 'var(--shadow)', marginBottom: 20, animation: 'fadeInUp 0.4s ease 0.1s both' }}>
-          <h2 style={{ fontFamily: 'var(--font-title)', fontSize: 18, color: 'var(--green)', marginBottom: 22 }}>Informações do perfil</h2>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <div>
-              <label style={{ display: 'block', fontWeight: 700, fontSize: 12, color: 'var(--dark)', marginBottom: 6 }}>Nome de exibição ✨</label>
-              <input className="input" value={form.display_name} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} placeholder="Como você quer ser chamado?" maxLength={50} />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontWeight: 700, fontSize: 12, color: 'var(--dark)', marginBottom: 6 }}>Nome de usuário 🔖</label>
-              <div style={{ position: 'relative' }}>
-                <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--dark-muted)', fontSize: 14, fontWeight: 700 }}>@</span>
-                <input className={`input ${usernameStatus === 'taken' || usernameStatus === 'invalid' ? 'input-error' : ''}`}
-                  style={{ paddingLeft: 30 }}
-                  value={form.username} onChange={e => handleUsernameChange(e.target.value)}
-                  placeholder="seu.usuario" maxLength={30} />
-              </div>
-              {usernameHint && (
-                <p style={{ fontSize: 11, marginTop: 5, color: usernameHint.color, fontWeight: 600 }}>{usernameHint.text}</p>
-              )}
-              <p style={{ fontSize: 11, marginTop: 4, color: 'var(--dark-muted)' }}>Usado para receber cartinhas 💌</p>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontWeight: 700, fontSize: 12, color: 'var(--dark)', marginBottom: 6 }}>Bio (opcional)</label>
-              <textarea className="input" value={form.bio} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))} placeholder="Conte um pouco sobre você..." maxLength={160} rows={3} />
-              <p style={{ fontSize: 11, color: 'var(--dark-muted)', marginTop: 4, textAlign: 'right' }}>{form.bio.length}/160</p>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8 }}>
-              <div>
-                <p style={{ fontSize: 11, color: 'var(--dark-muted)', fontFamily: 'var(--font-cute)' }}>
-                  📧 {user?.email}
-                </p>
-              </div>
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving || !canSave()}>
-                {saving ? <><span className="loader loader-sm" style={{ margin: 0 }} /> Salvando...</> : 'Salvar ✨'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Danger Zone */}
-        <div style={{ background: 'white', borderRadius: 'var(--radius)', padding: 28, boxShadow: 'var(--shadow)', border: '2px solid rgba(229,57,53,0.12)', animation: 'fadeInUp 0.4s ease 0.2s both' }}>
-          <h2 style={{ fontFamily: 'var(--font-title)', fontSize: 18, color: 'var(--red)', marginBottom: 10 }}>Zona de perigo ⚠️</h2>
-          <p style={{ color: 'var(--dark-muted)', fontSize: 13, fontFamily: 'var(--font-cute)', marginBottom: 16 }}>
-            Ao deletar sua conta, todos os seus álbuns, páginas, cartinhas e dados serão removidos permanentemente.
-          </p>
-          {!showDeleteConfirm ? (
-            <button className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)}>🗑️ Deletar minha conta</button>
-          ) : (
-            <div style={{ background: 'rgba(229,57,53,0.05)', borderRadius: 'var(--radius-sm)', padding: 16 }}>
-              <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: 'var(--red)' }}>
-                Digite <strong>DELETAR</strong> para confirmar:
-              </p>
-              <input className="input input-error" value={deleteInput} onChange={e => setDeleteInput(e.target.value)} placeholder="DELETAR" style={{ marginBottom: 10 }} />
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => { setShowDeleteConfirm(false); setDeleteInput('') }}>Cancelar</button>
-                <button className="btn btn-sm" style={{ background: 'var(--red)', color: 'white' }}
-                  onClick={handleDeleteAccount}
-                  disabled={deleteInput !== 'DELETAR' || deleting}>
-                  {deleting ? 'Deletando...' : 'Confirmar exclusão'}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
-    </div>
-  )
+.editor {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
+
+.topBar {
+  background: white;
+  border-bottom: 2px solid rgba(27,58,31,0.08);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.backBtn {
+  color: var(--green);
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.backBtn:hover { text-decoration: underline; }
+
+.albumTitle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.titleText {
+  font-family: var(--font-title);
+  font-size: 18px;
+  color: var(--dark);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+.editBtn:hover { opacity: 1; }
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.saving {
+  font-size: 12px;
+  color: rgba(27,58,31,0.5);
+  font-family: var(--font-cute);
+  font-style: italic;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: white;
+  border-right: 2px solid rgba(27,58,31,0.06);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.coverSection {
+  padding: 20px 16px;
+  border-bottom: 2px solid rgba(27,58,31,0.06);
+  text-align: center;
+}
+
+.coverName {
+  font-family: var(--font-title);
+  font-size: 13px;
+  color: var(--dark);
+  margin-top: 10px;
+  word-break: break-word;
+}
+
+.coverDesc {
+  font-size: 11px;
+  color: rgba(27,58,31,0.5);
+  margin-top: 4px;
+  font-family: var(--font-cute);
+  word-break: break-word;
+}
+
+.pagesSection { flex: 1; padding: 16px; }
+
+.pagesHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 800;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(27,58,31,0.5);
+  margin-bottom: 10px;
+}
+
+.addPageBtn {
+  background: var(--green);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.addPageBtn:hover { background: #2A6B2E; }
+
+.pagesList { display: flex; flex-direction: column; gap: 6px; }
+
+.noPagesHint { padding: 16px 0; text-align: center; }
+
+.pageThumb {
+  width: 100%;
+  padding: 10px 12px;
+  background: #EAF5EA;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.pageThumb:hover { border-color: rgba(58,140,63,0.4); }
+.pageThumb.activePage { border-color: var(--green); background: #D4EDDA; }
+
+.pageNum { font-weight: 700; font-size: 13px; color: var(--dark); }
+.pageElem { font-size: 10px; color: rgba(27,58,31,0.5); }
+
+.canvasArea {
+  flex: 1;
+  overflow: auto;
+  background: #F5F0EA;
+  background-image: radial-gradient(circle, rgba(58,140,63,0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px;
+}
+
+.emptyState {
+  text-align: center;
+  margin: auto;
+  padding: 40px;
+}
+.emptyState h2 { font-family: var(--font-title); font-size: 24px; color: var(--dark); margin: 16px 0 8px; }
+.emptyState p { color: rgba(27,58,31,0.6); font-family: var(--font-cute); margin-bottom: 24px; }
