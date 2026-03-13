@@ -139,9 +139,31 @@ export default function AlbumEditor() {
               <p style={{ color: 'var(--dark-muted)', fontFamily: 'var(--font-cute)', marginBottom: 20 }}>Adicione uma página para começar!</p>
               {isOwner && <button className="btn btn-primary" onClick={addPage}>+ Adicionar página</button>}
             </div>
-          ) : page ? (
-            <PageCanvas key={page.id} page={page} isOwner={canEdit} onSave={savePage} onDeletePage={isOwner ? handleDeletePage : null} userId={user?.id} />
-          ) : null}
+          ) : (
+            <>
+              {/* Desktop: mostra só a página atual */}
+              <div className="desktop-canvas">
+                {page && <PageCanvas key={page.id} page={page} isOwner={canEdit} onSave={savePage} onDeletePage={isOwner ? handleDeletePage : null} userId={user?.id} />}
+              </div>
+              {/* Mobile: todas as páginas empilhadas */}
+              <div className="mobile-canvas-stack">
+                {pages.map((p, i) => (
+                  <div key={p.id} style={{ width: '100%', marginBottom: 28 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, padding: '0 4px' }}>
+                      <span style={{ fontFamily: 'var(--font-title)', fontSize: 12, color: 'var(--dark-muted)', fontWeight: 700 }}>Página {i + 1}</span>
+                      {i === cur && <span style={{ fontSize: 10, color: 'var(--green)', fontWeight: 800 }}>● editando</span>}
+                    </div>
+                    <div onClick={() => { if (i !== cur) setCur(i) }}>
+                      <PageCanvas key={p.id} page={p} isOwner={canEdit && i === cur} onSave={i === cur ? savePage : () => {}} onDeletePage={isOwner && i === cur ? handleDeletePage : null} userId={user?.id} />
+                    </div>
+                  </div>
+                ))}
+                {isOwner && (
+                  <button className="btn btn-primary" onClick={addPage} style={{ width: '100%', marginTop: 4 }}>+ Nova página</button>
+                )}
+              </div>
+            </>
+          )}
         </main>
       </div>
 
@@ -157,9 +179,13 @@ export default function AlbumEditor() {
       </div>
 
       <style>{`
+        .desktop-canvas { display: flex; flex-direction: column; align-items: center; width: 100%; }
+        .mobile-canvas-stack { display: none; width: 100%; }
         @media (max-width: 700px) {
           .sidebar-desktop { display: none !important; }
           .mobile-pagebar { display: flex !important; }
+          .desktop-canvas { display: none !important; }
+          .mobile-canvas-stack { display: flex !important; flex-direction: column; align-items: center; }
         }
       `}</style>
 

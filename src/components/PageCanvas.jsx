@@ -36,7 +36,6 @@ const PAGE_STYLES = [
   { id:'grid',     label:'Grade',    bg:'#F3E5F5', type:'pattern', pattern:'linear-gradient(rgba(150,80,200,0.12) 1px,transparent 1px),linear-gradient(90deg,rgba(150,80,200,0.12) 1px,transparent 1px)',                   patternSize:'24px 24px' },
   { id:'diagonal', label:'Diagonal', bg:'#FCE4EC', type:'pattern', pattern:'repeating-linear-gradient(45deg,transparent,transparent 12px,rgba(255,105,135,0.15) 12px,rgba(255,105,135,0.15) 14px)',                        patternSize:'auto' },
   { id:'hearts',   label:'Corações', bg:'#FFF0F5', type:'pattern', pattern:'radial-gradient(circle,#FFB6C1 2px,transparent 2px)',                                                                                           patternSize:'18px 18px' },
-  { id:'stars',    label:'Estrelas', bg:'#1a1a2e', type:'pattern', pattern:'radial-gradient(circle,#ffe066 1.5px,transparent 1.5px),radial-gradient(circle,#fff 1px,transparent 1px)',                                     patternSize:'30px 30px,15px 15px' },
 ]
 
 const DRAW_TOOLS = [
@@ -63,6 +62,10 @@ const HANDLES = [
 const ALLOWED_TYPES = ['image/jpeg','image/png','image/webp','image/gif']
 const MAX_SIZE = 5 * 1024 * 1024
 
+// Dimensões lógicas do canvas (proporção A4: 1:√2)
+const CANVAS_W = 595
+const CANVAS_H = 842
+
 // ─── Component ────────────────────────────────────────
 export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId }) {
   const toast = useToast()
@@ -76,6 +79,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
   // desenho
   const [drawTool,  setDrawTool]  = useState('pen')
   const [drawColor, setDrawColor] = useState('#1B3A1F')
+  const [drawSize,  setDrawSize]  = useState(null)  // null = usa padrão da ferramenta
   const [isDrawing, setIsDrawing] = useState(false)
 
   const [uploading, setUploading] = useState(false)
@@ -133,10 +137,13 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
     if (!el) return
     const rect = canvasRef.current.getBoundingClientRect()
     const { x, y } = getXY(e)
+    // Offset no espaço lógico
+    const scaleX = rect.width  / CANVAS_W
+    const scaleY = rect.height / CANVAS_H
     dragRef.current = {
       type: 'move', id,
-      ox: x - rect.left - el.x,
-      oy: y - rect.top  - el.y,
+      ox: (x - rect.left) / scaleX - el.x,
+      oy: (y - rect.top)  / scaleY - el.y,
     }
     setSelected(id)
     setPanel('none')
@@ -152,15 +159,19 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
     const rect = canvasRef.current.getBoundingClientRect()
     const { x, y } = getXY(e)
 
-    // Mede altura real do container DOM (funciona para texto com height:auto)
-    let measuredH = el.height || 80
+    // Canvas lógico A4: 595 x 842
+    const scaleX = rect.width  / CANVAS_W
+    const scaleY = rect.height / CANVAS_H
+
+    // Mede altura real do container DOM e converte para espaço lógico
+    let measuredH = el.height || 120
     const domEl = canvasRef.current.querySelector(`[data-elid="${id}"]`)
-    if (domEl) measuredH = domEl.getBoundingClientRect().height * (720 / rect.width)
+    if (domEl) measuredH = domEl.getBoundingClientRect().height / scaleY
 
     dragRef.current = {
       type: 'resize', id, handle,
-      startX: x - rect.left,
-      startY: y - rect.top,
+      startX: (x - rect.left) / scaleX,
+      startY: (y - rect.top)  / scaleY,
       origEl: { ...el, height: measuredH },
     }
   }
@@ -174,20 +185,24 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
     const { x, y } = e.touches
       ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
       : { x: e.clientX, y: e.clientY }
-    const cx = x - rect.left
-    const cy = y - rect.top
 
-    // MOVE
+    // Converte coordenadas reais → espaço lógico do canvas
+    const scaleX = rect.width  / CANVAS_W
+    const scaleY = rect.height / CANVAS_H
+    const cx = (x - rect.left) / scaleX
+    const cy = (y - rect.top)  / scaleY
+
+    // MOVE — limites em coordenadas lógicas
     if (dragRef.current.type === 'move') {
       const { id, ox, oy } = dragRef.current
       upd(id, {
-        x: Math.max(0, Math.min(cx - ox, rect.width  - 10)),
-        y: Math.max(0, Math.min(cy - oy, rect.height - 10)),
+        x: Math.max(0, Math.min(cx - ox, CANVAS_W - 10)),
+        y: Math.max(0, Math.min(cy - oy, CANVAS_H - 10)),
       })
       return
     }
 
-    // RESIZE
+    // RESIZE — tudo em coordenadas lógicas
     if (dragRef.current.type === 'resize') {
       const { id, handle, startX, startY, origEl } = dragRef.current
       const dx = cx - startX
@@ -196,7 +211,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
 
       let ex = origEl.x, ey = origEl.y
       let ew = origEl.width  || 200
-      let eh = origEl.height || 80
+      let eh = origEl.height || 120
 
       if (handle.includes('e')) ew = Math.max(MIN_W, origEl.width + dx)
       if (handle.includes('s')) eh = Math.max(MIN_H, origEl.height + dy)
@@ -251,12 +266,15 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
   const startRotate = (e, el) => {
     e.stopPropagation()
     const rect = canvasRef.current.getBoundingClientRect()
-    const cx = el.x + (el.width  || 200) / 2
-    const cy = el.y + (el.height || 180) / 2
-    const startAngle = Math.atan2(e.clientY - rect.top - cy, e.clientX - rect.left - cx) * 180 / Math.PI
+    const scaleX = rect.width  / CANVAS_W
+    const scaleY = rect.height / CANVAS_H
+    // Centro em pixels reais na tela
+    const cx = rect.left + el.x * scaleX + (el.width  || 200) * scaleX / 2
+    const cy = rect.top  + el.y * scaleY + (el.height || 180) * scaleY / 2
+    const startAngle = Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI
     const startRot   = el.rotation || 0
     const onRot = (ev) => {
-      const a = Math.atan2(ev.clientY - rect.top - cy, ev.clientX - rect.left - cx) * 180 / Math.PI
+      const a = Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI
       upd(el.id, { rotation: Math.round(startRot + (a - startAngle)) })
     }
     const onRotEnd = () => {
@@ -268,14 +286,16 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
   }
 
   // ── Drawing ──────────────────────────────────────────
-  const tool = DRAW_TOOLS.find(t => t.id === drawTool) || DRAW_TOOLS[0]
+  const toolDef = DRAW_TOOLS.find(t => t.id === drawTool) || DRAW_TOOLS[0]
+  // aplica tamanho customizado mantendo os demais atributos da ferramenta
+  const tool = { ...toolDef, lineWidth: drawSize !== null ? drawSize : toolDef.lineWidth }
 
   const getCanvasXY = (e) => {
     const rect = svgRef.current.getBoundingClientRect()
     const src  = e.touches ? e.touches[0] : e
     return {
-      x: ((src.clientX - rect.left) / rect.width  * 720).toFixed(2),
-      y: ((src.clientY - rect.top)  / rect.height * (720 * 5/7)).toFixed(2),
+      x: ((src.clientX - rect.left) / rect.width  * CANVAS_W).toFixed(2),
+      y: ((src.clientY - rect.top)  / rect.height * CANVAS_H).toFixed(2),
     }
   }
 
@@ -356,7 +376,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
     const { url, error } = await uploadPhoto(file, userId)
     setUploading(false)
     if (error || !url) { toast('Erro ao enviar 😢','error'); e.target.value=''; return }
-    add({ id: uuidv4(), type: 'photo', x: 40, y: 40, url, width: 200, height: 180, radius: 8, rotation: 0 })
+    add({ id: uuidv4(), type: 'photo', x: 40, y: 40, url, width: 220, height: 180, radius: 8, rotation: 0 })
     toast('Foto adicionada! 📷','success')
     e.target.value = ''
   }
@@ -387,7 +407,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
 
       {/* ── Toolbar ── */}
       {isOwner && (
-        <div style={{ background:'white', borderRadius:18, padding:'8px 14px', display:'flex', alignItems:'center', gap:8, boxShadow:'var(--shadow-md)', flexWrap:'wrap', justifyContent:'center', width:'100%', maxWidth:720 }}>
+        <div style={{ background:'white', borderRadius:18, padding:'8px 14px', display:'flex', alignItems:'center', gap:8, boxShadow:'var(--shadow-md)', flexWrap:'wrap', justifyContent:'center', width:'100%', maxWidth:595 }}>
 
           {/* Adicionar */}
           <div style={{ display:'flex', gap:5 }}>
@@ -423,12 +443,12 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
 
       {/* ── Draw Toolbar ── */}
       {panel === 'draw' && isOwner && (
-        <div style={{ background:'white', borderRadius:16, padding:'12px 16px', boxShadow:'var(--shadow)', width:'100%', maxWidth:720, animation:'slideDown 0.2s ease' }}>
-          <div style={{ display:'flex', gap:16, flexWrap:'wrap', alignItems:'center' }}>
+        <div style={{ background:'white', borderRadius:16, padding:'12px 16px', boxShadow:'var(--shadow)', width:'100%', maxWidth:595, animation:'slideDown 0.2s ease' }}>
+          <div style={{ display:'flex', gap:12, flexWrap:'wrap', alignItems:'center' }}>
             {/* Ferramentas */}
-            <div style={{ display:'flex', gap:6 }}>
+            <div style={{ display:'flex', gap:5 }}>
               {DRAW_TOOLS.map(t => (
-                <button key={t.id} onClick={() => setDrawTool(t.id)} title={t.label}
+                <button key={t.id} onClick={() => { setDrawTool(t.id); setDrawSize(null) }} title={t.label}
                   style={{ ...toolBtn(drawTool===t.id), width:42, height:42, fontSize:18, flexDirection:'column', gap:2 }}>
                   <span>{t.icon}</span>
                   <span style={{fontSize:8,fontWeight:800,color:drawTool===t.id?'var(--green)':'var(--dark-muted)'}}>{t.label}</span>
@@ -438,29 +458,58 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
 
             <div style={{width:1,height:36,background:'var(--dark-faint)',flexShrink:0}}/>
 
-            {/* Cores */}
-            <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
-              {DRAW_COLORS.map(c => (
-                <button key={c} onClick={() => setDrawColor(c)}
-                  style={{ width:24, height:24, borderRadius:'50%', background:c, border:`3px solid ${drawColor===c?'#6B4DE6':'rgba(27,58,31,0.15)'}`, cursor:'pointer', transform:drawColor===c?'scale(1.25)':'scale(1)', transition:'transform 0.1s', boxShadow:c==='#ffffff'?'inset 0 0 0 1px rgba(0,0,0,0.15)':'' }}/>
-              ))}
-              <input type="color" value={drawColor} onChange={e => setDrawColor(e.target.value)}
-                style={{ width:24, height:24, borderRadius:'50%', border:'2px solid var(--dark-faint)', cursor:'pointer', padding:0, overflow:'hidden' }} title="Cor personalizada"/>
+            {/* Tamanho da ponta */}
+            <div style={{ display:'flex', flexDirection:'column', gap:4, minWidth:110 }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <label style={{ fontSize:10, fontWeight:800, color:'var(--dark-muted)' }}>Ponta</label>
+                <span style={{ fontSize:11, fontWeight:800, color:'var(--green)' }}>{tool.lineWidth}px</span>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                {/* preview do traço */}
+                <svg width={36} height={36} style={{ flexShrink:0, border:'1.5px solid var(--dark-faint)', borderRadius:8, background:'#fafafa' }}>
+                  <line x1={4} y1={18} x2={32} y2={18}
+                    stroke={toolDef.eraser ? '#ccc' : drawColor}
+                    strokeWidth={Math.min(tool.lineWidth, 28)}
+                    strokeLinecap={toolDef.cap}
+                    opacity={toolDef.alpha}/>
+                </svg>
+                <input type="range"
+                  min={toolDef.eraser ? 4 : 1}
+                  max={toolDef.eraser ? 60 : 40}
+                  step={1}
+                  value={tool.lineWidth}
+                  onChange={e => setDrawSize(+e.target.value)}
+                  style={{ flex:1, accentColor:'var(--green)', cursor:'pointer' }}/>
+              </div>
             </div>
+
+            <div style={{width:1,height:36,background:'var(--dark-faint)',flexShrink:0}}/>
+
+            {/* Cores — oculta para borracha */}
+            {!toolDef.eraser && (
+              <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+                {DRAW_COLORS.map(c => (
+                  <button key={c} onClick={() => setDrawColor(c)}
+                    style={{ width:24, height:24, borderRadius:'50%', background:c, border:`3px solid ${drawColor===c?'#6B4DE6':'rgba(27,58,31,0.15)'}`, cursor:'pointer', transform:drawColor===c?'scale(1.25)':'scale(1)', transition:'transform 0.1s', boxShadow:c==='#ffffff'?'inset 0 0 0 1px rgba(0,0,0,0.15)':'' }}/>
+                ))}
+                <input type="color" value={drawColor} onChange={e => setDrawColor(e.target.value)}
+                  style={{ width:24, height:24, borderRadius:'50%', border:'2px solid var(--dark-faint)', cursor:'pointer', padding:0, overflow:'hidden' }} title="Cor personalizada"/>
+              </div>
+            )}
 
             <div style={{width:1,height:36,background:'var(--dark-faint)',flexShrink:0}}/>
 
             <button className="btn btn-sm btn-danger" onClick={clearDrawing} title="Apagar tudo">🗑️ Limpar</button>
           </div>
           <p style={{ fontSize:11, color:'var(--dark-muted)', marginTop:8, fontFamily:'var(--font-cute)' }}>
-            💡 Clique e arraste no canvas para desenhar • Modo ativo: <strong>{DRAW_TOOLS.find(t=>t.id===drawTool)?.label}</strong>
+            💡 Clique e arraste para desenhar • <strong>{toolDef.label}</strong> — ponta: <strong>{tool.lineWidth}px</strong>
           </p>
         </div>
       )}
 
       {/* ── Sticker Panel ── */}
       {panel === 'stickers' && isOwner && (
-        <div style={{ background:'white', borderRadius:16, padding:14, boxShadow:'var(--shadow)', width:'100%', maxWidth:720, animation:'slideDown 0.2s ease' }}>
+        <div style={{ background:'white', borderRadius:16, padding:14, boxShadow:'var(--shadow)', width:'100%', maxWidth:595, animation:'slideDown 0.2s ease' }}>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(38px,1fr))', gap:4 }}>
             {STICKERS.map(s => (
               <button key={s} onClick={() => addSticker(s)}
@@ -476,7 +525,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
 
       {/* ── Paper Panel ── */}
       {panel === 'paper' && isOwner && (
-        <div style={{ background:'white', borderRadius:16, padding:16, boxShadow:'var(--shadow)', width:'100%', maxWidth:720, animation:'slideDown 0.2s ease' }}>
+        <div style={{ background:'white', borderRadius:16, padding:16, boxShadow:'var(--shadow)', width:'100%', maxWidth:595, animation:'slideDown 0.2s ease' }}>
           <p className="section-label" style={{ marginBottom:12 }}>Estilo do Papel 📄</p>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(70px,1fr))', gap:8 }}>
             {PAGE_STYLES.map(s => {
@@ -498,7 +547,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
 
       {/* ── Props Panel ── */}
       {panel === 'props' && selEl && isOwner && (
-        <div style={{ background:'white', borderRadius:16, padding:'14px 18px', boxShadow:'var(--shadow)', width:'100%', maxWidth:720, display:'flex', gap:18, flexWrap:'wrap', alignItems:'flex-start', animation:'slideDown 0.2s ease' }}>
+        <div style={{ background:'white', borderRadius:16, padding:'14px 18px', boxShadow:'var(--shadow)', width:'100%', maxWidth:595, display:'flex', gap:18, flexWrap:'wrap', alignItems:'flex-start', animation:'slideDown 0.2s ease' }}>
           {selEl.type === 'text' && (<>
             <div>
               <label style={{ fontSize:11, fontWeight:700, color:'var(--dark-muted)', display:'block', marginBottom:5 }}>Texto</label>
@@ -549,7 +598,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
       {/* ── Canvas ── */}
       <div
         ref={canvasRef}
-        style={{ width:'min(720px,100%)', aspectRatio:'7/5', borderRadius:20, ...canvasBg, position:'relative', overflow:'hidden', boxShadow:'0 10px 48px rgba(27,58,31,0.16)', touchAction:'none', flexShrink:0, cursor: isDrawMode ? 'crosshair' : 'default' }}
+        style={{ width:'min(595px,100%)', aspectRatio:`${CANVAS_W}/${CANVAS_H}`, borderRadius:12, ...canvasBg, position:'relative', overflow:'hidden', boxShadow:'0 10px 48px rgba(27,58,31,0.16)', touchAction:'none', flexShrink:0, cursor: isDrawMode ? 'crosshair' : 'default' }}
         onClick={() => { if (!isDrawMode) { setSelected(null); setPanel('none') } }}
       >
         {/* Elementos */}
@@ -599,7 +648,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
         {/* ── SVG Overlay para desenho ── */}
         <svg
           ref={svgRef}
-          viewBox={`0 0 720 ${720*5/7}`}
+          viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
           style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents: isDrawMode ? 'all' : 'none', zIndex:50 }}
           onMouseDown={onDrawStart}
           onMouseMove={onDrawMove}
