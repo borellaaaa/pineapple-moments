@@ -4,6 +4,7 @@ import { signInWithGoogle } from '../lib/supabase'
 import { useToast } from '../hooks/useToast'
 
 export default function Auth() {
+  const banned = new URLSearchParams(window.location.search).get('banned') === '1'
   const [loading, setLoading] = useState(false)
   const toast = useToast()
 

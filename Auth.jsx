@@ -1,128 +1,61 @@
-.page {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #EAF5EA 0%, #F7FAF0 50%, #FFFDE7 100%);
-  overflow: hidden;
-  position: relative;
-}
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { signInWithGoogle } from '../lib/supabase'
+import { useToast } from '../hooks/useToast'
 
-.floatSticker {
-  position: fixed;
-  animation: float 4s ease-in-out infinite;
-  opacity: 0.3;
-  pointer-events: none;
-  z-index: 0;
-  user-select: none;
-}
+export default function Auth() {
+  const banned = new URLSearchParams(window.location.search).get('banned') === '1'
+  const [loading, setLoading] = useState(false)
+  const toast = useToast()
 
-@keyframes float {
-  0%,100% { transform: translateY(0) rotate(-5deg); }
-  50% { transform: translateY(-15px) rotate(5deg); }
-}
+  const handleGoogle = async () => {
+    setLoading(true)
+    const { error } = await signInWithGoogle()
+    if (error) { toast('Erro ao entrar com Google 😢', 'error'); setLoading(false) }
+  }
 
-.nav {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 40px;
-  position: relative;
-  z-index: 10;
-}
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(160deg,#eaf5ea,#f7faf0,#fffde7)', padding: 24, position: 'relative' }}>
+      <Link to="/" style={{ position: 'absolute', top: 20, left: 20, color: 'var(--green)', fontWeight: 700, textDecoration: 'none', fontSize: 14 }}>← Voltar</Link>
 
-.logo {
-  font-family: var(--font-title);
-  font-size: 22px;
-  color: var(--green);
-}
+      <div style={{ background: 'white', borderRadius: 28, padding: '48px 40px', maxWidth: 400, width: '100%', boxShadow: '0 24px 64px rgba(58,140,63,0.14)', textAlign: 'center', animation: 'pop 0.4s ease' }}>
+        <div style={{ fontSize: 60, display: 'block', marginBottom: 10, animation: 'float 3s ease-in-out infinite' }}>🍍</div>
+        <h1 style={{ fontFamily: 'var(--font-title)', color: 'var(--green)', fontSize: 26, marginBottom: 10 }}>Pineapple Moments</h1>
+        <p style={{ color: 'var(--dark-muted)', fontFamily: 'var(--font-cute)', fontSize: 15, marginBottom: 36, lineHeight: 1.6 }}>
+          Entre para criar e compartilhar seus álbuns mais fofos 💛
+        </p>
 
-.hero {
-  max-width: 700px;
-  margin: 0 auto;
-  padding: 60px 24px 40px;
-  text-align: center;
-  position: relative;
-  z-index: 10;
-}
+        <button
+          onClick={handleGoogle}
+          disabled={loading}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '14px 22px', background: 'white', border: '2px solid var(--dark-faint)', borderRadius: 50, fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 15, color: 'var(--dark)', cursor: 'pointer', transition: 'all 0.2s', boxShadow: 'var(--shadow)' }}
+          onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--green)'; e.currentTarget.style.background = '#f0fff0' }}
+          onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--dark-faint)'; e.currentTarget.style.background = 'white' }}>
+          {loading ? (
+            <span className="loader loader-sm" style={{ margin: 0 }} />
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 48 48">
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+            </svg>
+          )}
+          {loading ? 'Entrando...' : 'Entrar com Google'}
+        </button>
 
-.badge {
-  display: inline-block;
-  background: linear-gradient(135deg, var(--yellow), #8BC34A);
-  color: var(--dark);
-  font-weight: 700;
-  font-size: 13px;
-  padding: 6px 18px;
-  border-radius: 50px;
-  margin-bottom: 24px;
-  box-shadow: 0 4px 12px rgba(245,200,0,0.35);
-}
+        <div style={{ margin: '24px 0', display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ flex: 1, borderTop: '2px solid var(--dark-faint)' }} />
+          <span style={{ fontSize: 11, color: 'var(--dark-muted)', fontWeight: 700 }}>Ambiente seguro</span>
+          <div style={{ flex: 1, borderTop: '2px solid var(--dark-faint)' }} />
+        </div>
 
-.title {
-  font-family: var(--font-title);
-  font-size: clamp(42px, 8vw, 72px);
-  line-height: 1.15;
-  color: var(--dark);
-  margin-bottom: 20px;
-}
-
-.highlight {
-  color: var(--green);
-  position: relative;
-}
-.highlight::after {
-  content: '';
-  position: absolute;
-  bottom: -4px;
-  left: 0; right: 0;
-  height: 6px;
-  background: var(--yellow);
-  border-radius: 3px;
-  opacity: 0.7;
-}
-
-.subtitle {
-  font-size: 18px;
-  color: rgba(27,58,31,0.65);
-  line-height: 1.6;
-  margin-bottom: 36px;
-  font-family: var(--font-cute);
-}
-
-.ctas {
-  display: flex;
-  gap: 16px;
-  justify-content: center;
-  flex-wrap: wrap;
-  margin-bottom: 60px;
-}
-
-.features {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 20px;
-  margin-top: 20px;
-}
-
-.featureCard {
-  background: white;
-  border-radius: var(--radius);
-  padding: 28px 20px;
-  box-shadow: var(--shadow);
-  animation: fadeIn 0.6s ease forwards;
-  opacity: 0;
-  transition: transform 0.2s;
-  border-top: 4px solid var(--yellow);
-}
-.featureCard:hover { transform: translateY(-4px); }
-.featureCard:nth-child(2) { border-top-color: var(--green); }
-.featureCard:nth-child(3) { border-top-color: #8BC34A; }
-
-.featureIcon { font-size: 36px; display: block; margin-bottom: 12px; }
-
-.featureCard h3 { font-weight: 800; font-size: 15px; margin-bottom: 6px; color: var(--dark); }
-.featureCard p { font-size: 13px; color: rgba(27,58,31,0.6); line-height: 1.5; font-family: var(--font-cute); }
-
-.footer { text-align: center; padding: 24px; color: rgba(27,58,31,0.4); font-size: 13px; position: relative; z-index: 10; }
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', fontSize: 12, color: 'var(--dark-muted)', fontFamily: 'var(--font-cute)' }}>
+          {['🔒 Seguro', '🌸 Fofo', '✨ Grátis'].map(t => (
+            <span key={t} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{t}</span>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
 }

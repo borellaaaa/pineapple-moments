@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useBanCheck } from '../hooks/useBanCheck'
 import { useToast } from '../hooks/useToast'
 import {
   getInboxLetters, getSentLetters, sendLetter, markLetterRead,
@@ -12,6 +13,7 @@ const LETTER_COLORS = ['#FFF8E1','#FCE4EC','#E8F5E9','#E3F2FD','#F3E5F5','#FFFDE
 export default function Letters() {
   const { user } = useAuth()
   const toast = useToast()
+  useBanCheck(user?.id)
   const [tab, setTab] = useState('inbox')
   const [inbox, setInbox] = useState([])
   const [sent, setSent] = useState([])
@@ -53,6 +55,13 @@ export default function Letters() {
 
   const handleSend = async (data) => {
     const { data: letter, error } = await sendLetter({ senderId: user.id, ...data })
+    if (error?.message === 'BANNED') {
+      toast('Sua conta foi bloqueada por violações. 🚫', 'error'); return false
+    }
+    if (error?.message?.startsWith('MODERATION:')) {
+      const label = error.message.replace('MODERATION:', '')
+      toast(`Mensagem bloqueada: ${label} detectado. ⚠️`, 'error'); return false
+    }
     if (error) { toast(error.message, 'error'); return false }
     setSent(p => [letter, ...p])
     toast('Cartinha enviada! 💌', 'success')

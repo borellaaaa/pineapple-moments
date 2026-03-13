@@ -336,21 +336,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
       cap:       tool.cap,
       eraser:    tool.eraser,
     }
-    setSvgPaths(prev => {
-      const next = tool.eraser
-        ? prev  // borracha: vamos usar clip-path, por agora apenas adiciona "apagador" visual
-        : [...prev, newPath]
-      mark()
-      return next
-    })
-    if (!tool.eraser) {
-      // ok, já adicionado acima
-    } else {
-      // Borracha: adiciona path com destination-out (só funciona em canvas, então usamos stroke branco/bg)
-      const bgColor = PAGE_STYLES.find(p => p.id === pageStyle)?.bg || '#fff'
-      const erasePath = { ...newPath, color: bgColor.startsWith('linear') ? '#ffffff' : bgColor, alpha: 1.0 }
-      setSvgPaths(prev => { mark(); return [...prev, erasePath] })
-    }
+    setSvgPaths(prev => { mark(); return [...prev, newPath] })
   }
 
   // ── Add elements ─────────────────────────────────────
@@ -375,6 +361,13 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
     setUploading(true); toast('Enviando foto... 📸')
     const { url, error } = await uploadPhoto(file, userId)
     setUploading(false)
+    if (error?.message === 'BANNED') {
+      toast('Sua conta foi bloqueada por violações. 🚫', 'error'); e.target.value=''; return
+    }
+    if (error?.message?.startsWith('MODERATION:')) {
+      const label = error.message.replace('MODERATION:', '')
+      toast(`Imagem bloqueada: ${label} detectado. ⚠️`, 'error'); e.target.value=''; return
+    }
     if (error || !url) { toast('Erro ao enviar 😢','error'); e.target.value=''; return }
     add({ id: uuidv4(), type: 'photo', x: 40, y: 40, url, width: 220, height: 180, radius: 8, rotation: 0 })
     toast('Foto adicionada! 📷','success')
@@ -646,10 +639,11 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
         })}
 
         {/* ── SVG Overlay para desenho ── */}
+        {/* isolation:isolate + destination-out = borracha apaga pixels reais sem cobrir o fundo */}
         <svg
           ref={svgRef}
           viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
-          style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents: isDrawMode ? 'all' : 'none', zIndex:50 }}
+          style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents: isDrawMode ? 'all' : 'none', zIndex:50, isolation:'isolate' }}
           onMouseDown={onDrawStart}
           onMouseMove={onDrawMove}
           onMouseUp={onDrawEnd}
@@ -657,29 +651,48 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
           onTouchMove={onDrawMove}
           onTouchEnd={onDrawEnd}
         >
-          {svgPaths.map(p => (
-            <polyline
-              key={p.id}
-              points={p.points}
-              fill="none"
-              stroke={p.color}
-              strokeWidth={p.lineWidth}
-              strokeLinecap={p.cap}
-              strokeLinejoin="round"
-              opacity={p.alpha}
-            />
-          ))}
+          {/* Traços normais */}
+          <g>
+            {svgPaths.filter(p => !p.eraser).map(p => (
+              <polyline
+                key={p.id}
+                points={p.points}
+                fill="none"
+                stroke={p.color}
+                strokeWidth={p.lineWidth}
+                strokeLinecap={p.cap}
+                strokeLinejoin="round"
+                opacity={p.alpha}
+              />
+            ))}
+          </g>
+          {/* Borrachas — destination-out apaga os pixels do SVG sem afetar o fundo */}
+          <g style={{ mixBlendMode:'destination-out' }}>
+            {svgPaths.filter(p => p.eraser).map(p => (
+              <polyline
+                key={p.id}
+                points={p.points}
+                fill="none"
+                stroke="rgba(0,0,0,1)"
+                strokeWidth={p.lineWidth}
+                strokeLinecap={p.cap}
+                strokeLinejoin="round"
+                opacity={1}
+              />
+            ))}
+          </g>
           {/* Path ao vivo durante o desenho */}
           {isDrawing && (
             <polyline
               ref={drawPath}
               points=""
               fill="none"
-              stroke={tool.eraser ? (PAGE_STYLES.find(p=>p.id===pageStyle)?.bg || '#fff') : drawColor}
+              stroke={tool.eraser ? 'rgba(0,0,0,1)' : drawColor}
               strokeWidth={tool.lineWidth}
               strokeLinecap={tool.cap}
               strokeLinejoin="round"
-              opacity={tool.alpha}
+              opacity={tool.eraser ? 1 : tool.alpha}
+              style={tool.eraser ? { mixBlendMode:'destination-out' } : {}}
             />
           )}
         </svg>

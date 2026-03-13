@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useBanCheck } from '../hooks/useBanCheck'
 import { useToast } from '../hooks/useToast'
 import { getAlbumById, updateAlbum, getPages, createPage, updatePage, deletePage, deleteAlbum } from '../lib/supabase'
 import AlbumCover from '../components/AlbumCover'
@@ -13,6 +14,7 @@ export default function AlbumEditor() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const toast = useToast()
+  useBanCheck(user?.id)
   const [album, setAlbum] = useState(null)
   const [pages, setPages] = useState([])
   const [cur, setCur] = useState(0)

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useBanCheck } from '../hooks/useBanCheck'
 import { useToast } from '../hooks/useToast'
 import { getMyAlbums, createAlbum, deleteAlbum, getSavedAlbums, unsaveAlbum, signOut, getProfile, getUnreadCount } from '../lib/supabase'
 import AlbumCover from '../components/AlbumCover'
@@ -10,6 +11,7 @@ import { v4 as uuidv4 } from 'uuid'
 export default function Dashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  useBanCheck(user?.id)
   const toast = useToast()
   const [albums, setAlbums] = useState([])
   const [saved, setSaved] = useState([])

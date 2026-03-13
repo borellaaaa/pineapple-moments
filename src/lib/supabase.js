@@ -106,6 +106,16 @@ export const uploadPhoto = async (file, userId) => {
   if (!allowed.includes(file.type)) return { url: null, error: new Error('Tipo de arquivo não permitido. Use JPG, PNG, WEBP ou GIF.') }
   if (file.size > 5 * 1024 * 1024) return { url: null, error: new Error('Imagem muito grande! Máximo 5MB.') }
 
+  // ── Moderação: verifica a imagem ANTES de fazer upload ──
+  const { moderateImageBase64, isUserBanned } = await import('./moderation.js')
+  if (userId && await isUserBanned(userId)) {
+    return { url: null, error: new Error('BANNED') }
+  }
+  const modResult = await moderateImageBase64(file, userId)
+  if (modResult.blocked) {
+    return { url: null, error: new Error(`MODERATION:${modResult.label}`) }
+  }
+
   const ext = file.name.split('.').pop().toLowerCase()
   const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
   const path = `${userId}/${safeName}`
@@ -124,6 +134,16 @@ export const sendLetter = async ({ senderId, recipientUsername, message, photoUr
   const { data: recipient, error: rErr } = await getProfileByUsername(recipientUsername)
   if (rErr || !recipient) return { data: null, error: new Error('Usuário não encontrado 😢') }
   if (recipient.id === senderId) return { data: null, error: new Error('Você não pode enviar carta para si mesmo!') }
+
+  // ── Moderação: verifica texto da cartinha ──
+  const { moderateText, isUserBanned } = await import('./moderation.js')
+  if (await isUserBanned(senderId)) {
+    return { data: null, error: new Error('BANNED') }
+  }
+  const modResult = await moderateText(message, senderId)
+  if (modResult.blocked) {
+    return { data: null, error: new Error(`MODERATION:${modResult.label}`) }
+  }
 
   return supabase.from('letters').insert({
     sender_id: senderId,
