@@ -1,131 +1,223 @@
-/**
- * ─── Sistema de Moderação de Conteúdo ────────────────────────────────────────
- *
- * Chama /api/moderate (Vercel Serverless Function) que é um proxy para a
- * OpenAI Moderation API. Isso resolve o bloqueio de CORS que acontece quando
- * o browser tenta chamar a OpenAI diretamente.
- *
- * A chave OPENAI_API_KEY fica APENAS no servidor (Vercel Environment Variables)
- * sem o prefixo VITE_ — nunca é exposta no bundle do frontend.
- *
- * Setup:
- *   1. No Vercel → Settings → Environment Variables
- *      Nome: OPENAI_API_KEY  (sem VITE_)
- *      Valor: sua chave sk-...
- *   2. Redeploy
- *   3. Rodar supabase-moderation.sql no Supabase SQL Editor
- * ─────────────────────────────────────────────────────────────────────────────
- */
+import { createClient } from '@supabase/supabase-js'
 
-import { supabase } from './supabase'
+export const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+)
 
-const VIOLATIONS_BEFORE_BAN = 3
-
-const CATEGORY_LABELS = {
-  'hate':                    'discurso de ódio',
-  'hate/threatening':        'ameaça de ódio',
-  'harassment':              'assédio',
-  'harassment/threatening':  'ameaça de assédio',
-  'sexual':                  'conteúdo sexual',
-  'sexual/minors':           'conteúdo sexual envolvendo menores',
-  'violence':                'violência',
-  'violence/graphic':        'violência gráfica',
-  'self-harm':               'automutilação',
-  'self-harm/intent':        'intenção de automutilação',
-  'self-harm/instructions':  'instruções de automutilação',
-  'illicit':                 'atividade ilegal',
-  'illicit/violent':         'atividade ilegal com violência',
-}
-
-// ─── Chamar nosso proxy /api/moderate ────────────────────────────────────────
-async function callModerate(input) {
-  try {
-    const res = await fetch('/api/moderate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input }),
-    })
-    if (!res.ok) return { flagged: false, categories: [] }
-    return await res.json()
-  } catch (err) {
-    console.warn('[Moderação] Falha na chamada:', err)
-    return { flagged: false, categories: [] }
-  }
-}
-
-// ─── Registrar violação + banir se atingiu limite ────────────────────────────
-async function recordViolation(userId, type, content, categories) {
-  if (!userId) return
-
-  await supabase.from('moderation_violations').insert({
-    user_id:    userId,
-    type,
-    content:    typeof content === 'string' ? content.slice(0, 500) : '[imagem]',
-    categories: categories.join(', '),
-    created_at: new Date().toISOString(),
+// ─── Auth ──────────────────────────────────────────────
+export const signInWithGoogle = () =>
+  supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin + '/dashboard' }
   })
 
-  const { count } = await supabase
-    .from('moderation_violations')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
+export const signOut = () => supabase.auth.signOut()
 
-  if (count >= VIOLATIONS_BEFORE_BAN) {
-    await supabase.from('moderation_bans').upsert({
-      user_id:   userId,
-      reason:    `Ban automático: ${count} violações de moderação`,
-      banned_at: new Date().toISOString(),
-    }, { onConflict: 'user_id' })
-  }
+// ─── Profiles ─────────────────────────────────────────
+export const getProfile = (userId) =>
+  supabase.from('profiles').select('*').eq('id', userId).single()
+
+export const getProfileByUsername = (username) =>
+  supabase.from('profiles').select('*').eq('username', username.toLowerCase()).single()
+
+export const upsertProfile = (userId, data) =>
+  supabase.from('profiles').upsert({
+    id: userId,
+    ...data,
+    username: data.username ? data.username.toLowerCase() : undefined,
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'id' }).select().single()
+
+export const isUsernameAvailable = async (username, currentUserId) => {
+  const { data } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('username', username.toLowerCase())
+    .single()
+  if (!data) return true
+  return data.id === currentUserId
 }
 
-// ─── Verificar se usuário está banido ────────────────────────────────────────
-export async function isUserBanned(userId) {
-  if (!userId) return false
+// ─── Albums ────────────────────────────────────────────
+export const getMyAlbums = (userId) =>
+  supabase.from('albums').select('*').eq('owner_id', userId).order('created_at', { ascending: false })
+
+export const getAlbumById = (id) =>
+  supabase.from('albums').select('*').eq('id', id).single()
+
+export const getAlbumByToken = (token) =>
+  supabase.from('albums').select('*').eq('share_token', token).single()
+
+export const createAlbum = (data) =>
+  supabase.from('albums').insert(data).select().single()
+
+export const updateAlbum = (id, data) =>
+  supabase.from('albums').update(data).eq('id', id).select().single()
+
+export const deleteAlbum = (id) =>
+  supabase.from('albums').delete().eq('id', id)
+
+// ─── Saved Albums ──────────────────────────────────────
+export const getSavedAlbums = (userId) =>
+  supabase
+    .from('saved_albums')
+    .select('album_id, saved_at, albums(*)')
+    .eq('user_id', userId)
+    .order('saved_at', { ascending: false })
+
+export const saveAlbum = (userId, albumId) =>
+  supabase.from('saved_albums').insert({ user_id: userId, album_id: albumId }).select().single()
+
+export const unsaveAlbum = (userId, albumId) =>
+  supabase.from('saved_albums').delete().eq('user_id', userId).eq('album_id', albumId)
+
+export const isAlbumSaved = async (userId, albumId) => {
   const { data } = await supabase
-    .from('moderation_bans')
+    .from('saved_albums')
     .select('id')
     .eq('user_id', userId)
-    .maybeSingle()
+    .eq('album_id', albumId)
+    .single()
   return !!data
 }
 
-// ─── Moderação de TEXTO ───────────────────────────────────────────────────────
-export async function moderateText(text, userId = null) {
-  if (!text || text.trim().length < 3) return { blocked: false, categories: [], label: '' }
+// ─── Pages ─────────────────────────────────────────────
+export const getPages = (albumId) =>
+  supabase.from('pages').select('*').eq('album_id', albumId).order('page_number')
 
-  const result = await callModerate([{ type: 'text', text }])
+export const createPage = (albumId, pageNumber) =>
+  supabase.from('pages').insert({ album_id: albumId, page_number: pageNumber, elements: [], bg_color: '#FFFFFF' }).select().single()
 
-  if (result.flagged && result.categories.length > 0) {
-    await recordViolation(userId, 'text', text, result.categories)
-    const labels = result.categories.map(c => CATEGORY_LABELS[c] || c).join(', ')
-    return { blocked: true, categories: result.categories, label: labels }
+// FIX: salva elements, bg_color E svg_paths juntos
+export const updatePage = (pageId, elements, bgColor, svgPaths) =>
+  supabase.from('pages').update({
+    elements,
+    ...(bgColor   !== undefined ? { bg_color:  bgColor   } : {}),
+    ...(svgPaths  !== undefined ? { svg_paths: svgPaths  } : {}),
+  }).eq('id', pageId).select().single()
+
+export const deletePage = (pageId) =>
+  supabase.from('pages').delete().eq('id', pageId)
+
+// ─── Photos ────────────────────────────────────────────
+export const uploadPhoto = async (file, userId) => {
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  if (!allowed.includes(file.type)) return { url: null, error: new Error('Tipo de arquivo não permitido. Use JPG, PNG, WEBP ou GIF.') }
+  if (file.size > 5 * 1024 * 1024) return { url: null, error: new Error('Imagem muito grande! Máximo 5MB.') }
+
+  // ── Moderação: verifica a imagem ANTES de fazer upload ──
+  const { moderateImageBase64, isUserBanned } = await import('./moderation.js')
+  if (userId && await isUserBanned(userId)) {
+    return { url: null, error: new Error('BANNED') }
+  }
+  const modResult = await moderateImageBase64(file, userId)
+  if (modResult.blocked) {
+    return { url: null, error: new Error(`MODERATION:${modResult.label}`) }
   }
 
-  return { blocked: false, categories: [], label: '' }
+  const ext = file.name.split('.').pop().toLowerCase()
+  const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  const path = `${userId}/${safeName}`
+
+  const { error } = await supabase.storage.from('album-photos').upload(path, file, {
+    cacheControl: '3600',
+    contentType: file.type
+  })
+  if (error) return { url: null, error }
+  const { data } = supabase.storage.from('album-photos').getPublicUrl(path)
+  return { url: data.publicUrl, error: null }
 }
 
-// ─── Moderação de IMAGEM (base64) ─────────────────────────────────────────────
-export async function moderateImageBase64(file, userId = null) {
-  if (!file) return { blocked: false, categories: [], label: '' }
+// ─── Letters ───────────────────────────────────────────
+export const sendLetter = async ({ senderId, recipientUsername, message, photoUrl }) => {
+  const { data: recipient, error: rErr } = await getProfileByUsername(recipientUsername)
+  if (rErr || !recipient) return { data: null, error: new Error('Usuário não encontrado 😢') }
+  if (recipient.id === senderId) return { data: null, error: new Error('Você não pode enviar carta para si mesmo!') }
 
-  return new Promise((resolve) => {
-    const reader = new FileReader()
-    reader.onload = async () => {
-      const base64 = reader.result
-      const result = await callModerate([{
-        type:      'image_url',
-        image_url: { url: base64 },
-      }])
+  // ── Moderação: verifica texto da cartinha ──
+  const { moderateText, isUserBanned } = await import('./moderation.js')
+  if (await isUserBanned(senderId)) {
+    return { data: null, error: new Error('BANNED') }
+  }
+  const modResult = await moderateText(message, senderId)
+  if (modResult.blocked) {
+    return { data: null, error: new Error(`MODERATION:${modResult.label}`) }
+  }
 
-      if (result.flagged && result.categories.length > 0) {
-        await recordViolation(userId, 'image', '[base64-pre-upload]', result.categories)
-        const labels = result.categories.map(c => CATEGORY_LABELS[c] || c).join(', ')
-        return resolve({ blocked: true, categories: result.categories, label: labels })
-      }
-      resolve({ blocked: false, categories: [], label: '' })
-    }
-    reader.onerror = () => resolve({ blocked: false, categories: [], label: '' })
-    reader.readAsDataURL(file)
-  })
+  return supabase.from('letters').insert({
+    sender_id: senderId,
+    recipient_username: recipientUsername.toLowerCase(),
+    recipient_id: recipient.id,
+    message: message.trim(),
+    photo_url: photoUrl || null
+  }).select().single()
+}
+
+// FIX: usar select simples sem join nomeado que pode falhar
+export const getInboxLetters = async (userId) => {
+  const { data, error } = await supabase
+    .from('letters')
+    .select('*')
+    .eq('recipient_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (error || !data) return { data: [], error }
+
+  // Busca perfis dos remetentes separadamente
+  const senderIds = [...new Set(data.map(l => l.sender_id).filter(Boolean))]
+  let senderMap = {}
+  if (senderIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, username, display_name, avatar_emoji')
+      .in('id', senderIds)
+    if (profiles) profiles.forEach(p => { senderMap[p.id] = p })
+  }
+
+  return {
+    data: data.map(l => ({ ...l, sender: senderMap[l.sender_id] || null })),
+    error: null
+  }
+}
+
+export const getSentLetters = async (userId) => {
+  const { data, error } = await supabase
+    .from('letters')
+    .select('*')
+    .eq('sender_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (error || !data) return { data: [], error }
+
+  // Busca perfis dos destinatários separadamente
+  const recipientIds = [...new Set(data.map(l => l.recipient_id).filter(Boolean))]
+  let recipientMap = {}
+  if (recipientIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, username, display_name, avatar_emoji')
+      .in('id', recipientIds)
+    if (profiles) profiles.forEach(p => { recipientMap[p.id] = p })
+  }
+
+  return {
+    data: data.map(l => ({ ...l, recipient: recipientMap[l.recipient_id] || null })),
+    error: null
+  }
+}
+
+export const markLetterRead = (letterId) =>
+  supabase.from('letters').update({ is_read: true }).eq('id', letterId)
+
+export const deleteLetter = (letterId) =>
+  supabase.from('letters').delete().eq('id', letterId)
+
+export const getUnreadCount = async (userId) => {
+  const { count } = await supabase
+    .from('letters')
+    .select('id', { count: 'exact', head: true })
+    .eq('recipient_id', userId)
+    .eq('is_read', false)
+  return count || 0
 }

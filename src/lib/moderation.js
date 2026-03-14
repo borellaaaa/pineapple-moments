@@ -1,19 +1,17 @@
 /**
- * ─── Sistema de Moderação de Conteúdo ────────────────────────────────────────
+ * ─── Sistema de Moderação via Supabase Edge Function ─────────────────────────
  *
- * Chama /api/moderate (Vercel Serverless Function) que é um proxy para a
- * OpenAI Moderation API. Isso resolve o bloqueio de CORS que acontece quando
- * o browser tenta chamar a OpenAI diretamente.
+ * Chama a Edge Function "moderate" hospedada no próprio Supabase.
+ * Isso resolve CORS (mesma origem) e mantém a chave OpenAI segura no servidor.
  *
- * A chave OPENAI_API_KEY fica APENAS no servidor (Vercel Environment Variables)
- * sem o prefixo VITE_ — nunca é exposta no bundle do frontend.
+ * Setup (único — rodar uma vez):
+ *   1. Instalar Supabase CLI: npm install -g supabase
+ *   2. supabase login
+ *   3. supabase link --project-ref SEU_PROJECT_REF
+ *   4. supabase secrets set OPENAI_API_KEY=sk-...
+ *   5. supabase functions deploy moderate
  *
- * Setup:
- *   1. No Vercel → Settings → Environment Variables
- *      Nome: OPENAI_API_KEY  (sem VITE_)
- *      Valor: sua chave sk-...
- *   2. Redeploy
- *   3. Rodar supabase-moderation.sql no Supabase SQL Editor
+ * Pronto. Sem mexer no Vercel, sem CORS, sem variável VITE_.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -37,16 +35,17 @@ const CATEGORY_LABELS = {
   'illicit/violent':         'atividade ilegal com violência',
 }
 
-// ─── Chamar nosso proxy /api/moderate ────────────────────────────────────────
+// ─── Chama a Edge Function "moderate" no Supabase ────────────────────────────
 async function callModerate(input) {
   try {
-    const res = await fetch('/api/moderate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input }),
+    const { data, error } = await supabase.functions.invoke('moderate', {
+      body: { input },
     })
-    if (!res.ok) return { flagged: false, categories: [] }
-    return await res.json()
+    if (error) {
+      console.warn('[Moderação] Edge function erro:', error.message)
+      return { flagged: false, categories: [] }
+    }
+    return data || { flagged: false, categories: [] }
   } catch (err) {
     console.warn('[Moderação] Falha na chamada:', err)
     return { flagged: false, categories: [] }
@@ -105,7 +104,7 @@ export async function moderateText(text, userId = null) {
   return { blocked: false, categories: [], label: '' }
 }
 
-// ─── Moderação de IMAGEM (base64) ─────────────────────────────────────────────
+// ─── Moderação de IMAGEM (base64 antes do upload) ────────────────────────────
 export async function moderateImageBase64(file, userId = null) {
   if (!file) return { blocked: false, categories: [], label: '' }
 
