@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { moderateText } from '../lib/moderation'
+import { useAuth } from '../hooks/useAuth'
 import AlbumCover from './AlbumCover'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -23,9 +25,15 @@ export default function NewAlbumModal({ onClose, onCreate, loading }) {
 
   const preview = { name, cover_color: c1, cover_accent: c2, cover_emoji: emoji }
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
     if (!name.trim()) return
+    const modName = await moderateText(name.trim())
+    if (modName.blocked) { alert(`Nome bloqueado: ${modName.label} ⚠️`); return }
+    if (desc.trim()) {
+      const modDesc = await moderateText(desc.trim())
+      if (modDesc.blocked) { alert(`Descrição bloqueada: ${modDesc.label} ⚠️`); return }
+    }
     onCreate({ name: name.trim(), description: desc.trim(), cover_color: c1, cover_accent: c2, cover_emoji: emoji, share_mode: shareMode, share_token: uuidv4() })
   }
 

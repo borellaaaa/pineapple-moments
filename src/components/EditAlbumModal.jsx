@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { moderateText } from '../lib/moderation'
 import AlbumCover from './AlbumCover'
 
 const PRESETS = [
@@ -24,6 +25,12 @@ export default function EditAlbumModal({ album, onClose, onSave }) {
 
   const submit = async (e) => {
     e.preventDefault()
+    const modName = await moderateText(name.trim())
+    if (modName.blocked) { alert(`Nome bloqueado: ${modName.label} ⚠️`); return }
+    if (desc.trim()) {
+      const modDesc = await moderateText(desc.trim())
+      if (modDesc.blocked) { alert(`Descrição bloqueada: ${modDesc.label} ⚠️`); return }
+    }
     setLoading(true)
     await onSave({ name: name.trim(), description: desc.trim(), cover_color: c1, cover_accent: c2, cover_emoji: emoji, share_mode: shareMode })
     setLoading(false)

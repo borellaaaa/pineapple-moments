@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { uploadPhoto } from '../lib/supabase'
+import { moderateText } from '../lib/moderation'
 import { useToast } from '../hooks/useToast'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -99,11 +100,23 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
   useEffect(() => { elemRef.current    = elements  }, [elements])
   useEffect(() => { svgPathsRef.current = svgPaths }, [svgPaths])
 
-  // auto-save
+  // auto-save com moderação de textos
   useEffect(() => {
     if (!dirty.current) return
-    const t = setTimeout(() => {
-      onSave(elements, pageStyle, svgPathsRef.current)
+    const t = setTimeout(async () => {
+      // Verifica todos os elementos de texto antes de salvar
+      const textElements = elemRef.current.filter(e => e.type === 'text' && e.text?.trim().length > 2)
+      for (const el of textElements) {
+        const mod = await moderateText(el.text, userId)
+        if (mod.blocked) {
+          // Remove o elemento ofensivo e avisa
+          setElements(prev => prev.filter(e => e.id !== el.id))
+          toast(`Texto bloqueado: ${mod.label} detectado ⚠️`, 'error')
+          dirty.current = false
+          return
+        }
+      }
+      onSave(elemRef.current, pageStyle, svgPathsRef.current)
       dirty.current = false
     }, 1800)
     return () => clearTimeout(t)
@@ -429,7 +442,19 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
               <button style={toolBtn(false,true)} onClick={del} title="Deletar">🗑️</button>
             </>)}
             {onDeletePage && <button style={toolBtn(false,true)} onClick={onDeletePage} title="Deletar página">📄❌</button>}
-            <button style={toolBtn(false)} onClick={() => { onSave(elements, pageStyle, svgPaths); toast('Salvo! ✅','success') }} title="Salvar">💾</button>
+            <button style={toolBtn(false)} onClick={async () => {
+              const textEls = elements.filter(e => e.type === 'text' && e.text?.trim().length > 2)
+              for (const el of textEls) {
+                const mod = await moderateText(el.text, userId)
+                if (mod.blocked) {
+                  setElements(prev => prev.filter(e => e.id !== el.id))
+                  toast(`Texto bloqueado: ${mod.label} ⚠️`, 'error')
+                  return
+                }
+              }
+              onSave(elements, pageStyle, svgPaths)
+              toast('Salvo! ✅','success')
+            }} title="Salvar">💾</button>
           </div>
         </div>
       )}
