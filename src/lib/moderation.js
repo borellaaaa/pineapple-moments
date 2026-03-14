@@ -1,53 +1,52 @@
 /**
- * ─── Sistema de Moderação via Supabase Edge Function ─────────────────────────
- *
- * Chama a Edge Function "moderate" hospedada no próprio Supabase.
- * Isso resolve CORS (mesma origem) e mantém a chave OpenAI segura no servidor.
- *
- * Setup (único — rodar uma vez):
- *   1. Instalar Supabase CLI: npm install -g supabase
- *   2. supabase login
- *   3. supabase link --project-ref SEU_PROJECT_REF
- *   4. supabase secrets set OPENAI_API_KEY=sk-...
- *   5. supabase functions deploy moderate
- *
- * Pronto. Sem mexer no Vercel, sem CORS, sem variável VITE_.
- * ─────────────────────────────────────────────────────────────────────────────
+ * Moderação via Supabase Edge Function — chamada fetch direta (sem SDK)
+ * Isso evita problemas de configuração do supabase.functions.invoke()
  */
 
 import { supabase } from './supabase'
 
 const VIOLATIONS_BEFORE_BAN = 3
 
+// URL da Edge Function montada a partir da URL do Supabase
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const MODERATE_URL = `${SUPABASE_URL}/functions/v1/moderate`
+const ANON_KEY     = import.meta.env.VITE_SUPABASE_ANON_KEY
+
 const CATEGORY_LABELS = {
-  'hate':                    'discurso de ódio',
-  'hate/threatening':        'ameaça de ódio',
-  'harassment':              'assédio',
-  'harassment/threatening':  'ameaça de assédio',
-  'sexual':                  'conteúdo sexual',
-  'sexual/minors':           'conteúdo sexual envolvendo menores',
-  'violence':                'violência',
-  'violence/graphic':        'violência gráfica',
-  'self-harm':               'automutilação',
-  'self-harm/intent':        'intenção de automutilação',
-  'self-harm/instructions':  'instruções de automutilação',
-  'illicit':                 'atividade ilegal',
-  'illicit/violent':         'atividade ilegal com violência',
+  'hate':                   'discurso de ódio',
+  'hate/threatening':       'ameaça de ódio',
+  'harassment':             'assédio',
+  'harassment/threatening': 'ameaça de assédio',
+  'sexual':                 'conteúdo sexual',
+  'sexual/minors':          'conteúdo sexual envolvendo menores',
+  'violence':               'violência',
+  'violence/graphic':       'violência gráfica',
+  'self-harm':              'automutilação',
+  'self-harm/intent':       'intenção de automutilação',
+  'self-harm/instructions': 'instruções de automutilação',
+  'illicit':                'atividade ilegal',
+  'illicit/violent':        'atividade ilegal com violência',
 }
 
-// ─── Chama a Edge Function "moderate" no Supabase ────────────────────────────
+// ─── Chama a Edge Function diretamente via fetch ──────────────────────────────
 async function callModerate(input) {
   try {
-    const { data, error } = await supabase.functions.invoke('moderate', {
-      body: { input },
+    const res = await fetch(MODERATE_URL, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${ANON_KEY}`,
+        'apikey':        ANON_KEY,
+      },
+      body: JSON.stringify({ input }),
     })
-    if (error) {
-      console.warn('[Moderação] Edge function erro:', error.message)
+    if (!res.ok) {
+      console.warn('[Moderação] Edge function status:', res.status)
       return { flagged: false, categories: [] }
     }
-    return data || { flagged: false, categories: [] }
+    return await res.json()
   } catch (err) {
-    console.warn('[Moderação] Falha na chamada:', err)
+    console.warn('[Moderação] Falha:', err)
     return { flagged: false, categories: [] }
   }
 }
@@ -69,12 +68,22 @@ async function recordViolation(userId, type, content, categories) {
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
 
-  if (count >= VIOLATIONS_BEFORE_BAN) {
+  // Ban automático a partir da 1ª violação grave (harassment/threatening, sexual, violence)
+  const INSTANT_BAN = ['harassment/threatening','hate/threatening','sexual/minors','illicit/violent']
+  const hasInstantBan = categories.some(c => INSTANT_BAN.includes(c))
+
+  if (hasInstantBan || count >= VIOLATIONS_BEFORE_BAN) {
     await supabase.from('moderation_bans').upsert({
       user_id:   userId,
-      reason:    `Ban automático: ${count} violações de moderação`,
+      reason:    hasInstantBan
+        ? `Ban imediato: ${categories.join(', ')}`
+        : `Ban automático: ${count} violações`,
       banned_at: new Date().toISOString(),
     }, { onConflict: 'user_id' })
+
+    // Força logout imediato
+    await supabase.auth.signOut()
+    window.location.href = '/auth?banned=1'
   }
 }
 
@@ -118,7 +127,7 @@ export async function moderateImageBase64(file, userId = null) {
       }])
 
       if (result.flagged && result.categories.length > 0) {
-        await recordViolation(userId, 'image', '[base64-pre-upload]', result.categories)
+        await recordViolation(userId, 'image', '[imagem]', result.categories)
         const labels = result.categories.map(c => CATEGORY_LABELS[c] || c).join(', ')
         return resolve({ blocked: true, categories: result.categories, label: labels })
       }

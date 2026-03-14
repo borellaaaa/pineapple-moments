@@ -1,13 +1,13 @@
 // Supabase Edge Function — moderate
-// Deploy: supabase functions deploy moderate
-// Variável necessária: supabase secrets set OPENAI_API_KEY=sk-...
+// IMPORTANTE: no dashboard Supabase → Edge Functions → moderate
+//             desativa "Enforce JWT" para esta função
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
-const CORS = {
+const CORS_HEADERS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, x-client-info',
 }
 
 const BLOCKED = [
@@ -19,28 +19,40 @@ const BLOCKED = [
   'illicit','illicit/violent',
 ]
 
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+  })
+}
+
 serve(async (req) => {
-  // CORS preflight
+  // CORS preflight — obrigatório para chamadas do browser
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS })
+    return new Response('ok', { headers: CORS_HEADERS })
   }
 
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405, headers: CORS })
+    return json({ error: 'Method not allowed' }, 405)
   }
 
   const apiKey = Deno.env.get('OPENAI_API_KEY')
   if (!apiKey) {
-    // Sem chave → deixa passar (não bloqueia o app)
-    return new Response(
-      JSON.stringify({ flagged: false, categories: [] }),
-      { headers: { ...CORS, 'Content-Type': 'application/json' } }
-    )
+    console.warn('[moderate] OPENAI_API_KEY não configurada')
+    return json({ flagged: false, categories: [] })
   }
 
+  let input
   try {
-    const { input } = await req.json()
+    const body = await req.json()
+    input = body.input
+  } catch {
+    return json({ flagged: false, categories: [] })
+  }
 
+  if (!input) return json({ flagged: false, categories: [] })
+
+  try {
     const res = await fetch('https://api.openai.com/v1/moderations', {
       method: 'POST',
       headers: {
@@ -51,11 +63,8 @@ serve(async (req) => {
     })
 
     if (!res.ok) {
-      console.error('OpenAI error:', res.status)
-      return new Response(
-        JSON.stringify({ flagged: false, categories: [] }),
-        { headers: { ...CORS, 'Content-Type': 'application/json' } }
-      )
+      console.error('[moderate] OpenAI respondeu:', res.status)
+      return json({ flagged: false, categories: [] })
     }
 
     const data = await res.json()
@@ -64,15 +73,11 @@ serve(async (req) => {
       ? BLOCKED.filter(cat => result.categories?.[cat] === true)
       : []
 
-    return new Response(
-      JSON.stringify({ flagged: flagged.length > 0, categories: flagged }),
-      { headers: { ...CORS, 'Content-Type': 'application/json' } }
-    )
+    console.log('[moderate] flagged:', flagged)
+    return json({ flagged: flagged.length > 0, categories: flagged })
+
   } catch (err) {
-    console.error('Edge function error:', err)
-    return new Response(
-      JSON.stringify({ flagged: false, categories: [] }),
-      { headers: { ...CORS, 'Content-Type': 'application/json' } }
-    )
+    console.error('[moderate] Erro:', err)
+    return json({ flagged: false, categories: [] })
   }
 })
