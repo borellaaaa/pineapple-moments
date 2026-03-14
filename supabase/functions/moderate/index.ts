@@ -13,137 +13,178 @@ function json(data: unknown, status = 200) {
   })
 }
 
-// ─── Padrões multilíngue ──────────────────────────────────────────────────────
+// ─── Padrões PT-BR — fallback instantâneo, zero custo ────────────────────────
 const PATTERNS: Record<string, RegExp[]> = {
   'violence': [
     /\b(vou te matar|te mato|vou matar|vou te machucar|vou te bater|te espanco|vou te enforcar|vou te esfaquear)\b/i,
-    /\b(i('ll| will) kill you|i('ll| will) hurt you|gonna kill you|i('ll| will) stab you|i('ll| will) shoot you)\b/i,
-    /\b(te voy a matar|te mato|voy a matarte|te voy a golpear|te voy a apuñalar)\b/i,
-    /\b(je vais te tuer|je vais te blesser|je vais te frapper)\b/i,
-    /\b(ich bringe dich um|ich töte dich|ich werde dich töten)\b/i,
-    /\b(ti ammazzo|ti uccido|ti faccio del male)\b/i,
-    /\b(kill yourself|kys|go die|drop dead)\b/i,
+    /\b(i('ll| will) kill you|gonna kill you|i('ll| will) stab you|i('ll| will) shoot you|kill yourself|kys)\b/i,
+    /\b(te voy a matar|voy a matarte|te voy a apuñalar)\b/i,
+    /\b(je vais te tuer|je vais te frapper)\b/i,
+    /\b(ich bringe dich um|ich töte dich)\b/i,
   ],
   'harassment/threatening': [
     /\b(vou te estuprar|te estupro|vou te abusar)\b/i,
-    /\b(i('ll| will) rape you|i('ll| will) assault you sexually)\b/i,
+    /\b(i('ll| will) rape you|i('ll| will) assault you)\b/i,
     /\b(te voy a violar|voy a violarte)\b/i,
-    /\b(je vais te violer)\b/i,
   ],
   'self-harm': [
-    /\b(se mata|se suicide|toma veneno|corta os pulsos|se enforque)\b/i,
+    /\b(se mata|se suicide|toma veneno|corta os pulsos)\b/i,
     /\b(kill yourself|cut yourself|end your life|commit suicide|hang yourself)\b/i,
     /\b(mátate|suicídate|córtate las venas)\b/i,
-    /\b(tue-toi|suicide-toi)\b/i,
-    /\b(bring dich um|töte dich selbst)\b/i,
   ],
   'sexual': [
-    /\b(buceta|xoxota|cu arrombado|pau no seu|pica no seu|putaria)\b/i,
-    /\b(fuck you|suck my (dick|cock)|motherfucker|cunt|pussy|asshole)\b/i,
+    /\b(buceta|xoxota|cu arrombado|pau no seu|pica no seu)\b/i,
+    /\b(fuck you|suck my dick|motherfucker|cunt)\b/i,
     /\b(chinga tu madre|hijo de puta|concha tu madre)\b/i,
-    /\b(va te faire foutre|fils de pute|enculé|salope)\b/i,
-    /\b(fick dich|wichser|hurensohn)\b/i,
-    /\b(vaffanculo|figlio di puttana|cazzo)\b/i,
+    /\b(va te faire foutre|fils de pute|enculé)\b/i,
+    /\b(fick dich|hurensohn|wichser)\b/i,
+    /\b(vaffanculo|figlio di puttana)\b/i,
     /\b(nudes|send nudes|dick pic)\b/i,
   ],
   'hate': [
-    /\b(negro safado|viado do inferno|sapatão do inferno|judeu imundo)\b/i,
-    /\b(nigger|faggot|kike|spic|chink|towelhead|raghead)\b/i,
-    /\b(negro de mierda|maricón|judío de mierda)\b/i,
-    /\b(sale (noir|arabe|juif)|pédé)\b/i,
-    /\b(scheiß (jude|ausländer)|schwuchtel)\b/i,
+    /\b(negro safado|viado do inferno|sapatão do inferno)\b/i,
+    /\b(nigger|faggot|kike|spic|chink|raghead)\b/i,
+    /\b(negro de mierda|maricón)\b/i,
+    /\b(sale noir|sale arabe|sale juif|pédé)\b/i,
     /\b(white power|heil hitler|death to (jews|muslims|blacks|gays))\b/i,
   ],
   'harassment': [
-    /\b(seu fdp|sua fdp|vai se foder|vai tomar no|filha da puta|filho da puta|lixo humano)\b/i,
-    /\b(you('re| are) (worthless|garbage|trash|disgusting|pathetic)|nobody likes you|go to hell)\b/i,
-    /\b(eres una basura|nadie te quiere|vete al infierno|pedazo de mierda)\b/i,
-    /\b(tu es un(e)? (déchet|merde|ordure)|va en enfer)\b/i,
-    /\b(du bist wertlos|niemand mag dich|geh zur hölle)\b/i,
+    /\b(seu fdp|sua fdp|vai se foder|filha da puta|filho da puta)\b/i,
+    /\b(you('re| are) (worthless|garbage|trash|pathetic)|nobody likes you|go to hell)\b/i,
+    /\b(eres una basura|nadie te quiere|vete al infierno)\b/i,
   ],
   'illicit': [
-    /\b(comprar (droga|cocaína|crack|heroína)|vender (droga|arma))\b/i,
-    /\b(buy (drugs|cocaine|heroin|meth)|sell (drugs|weapons|guns))\b/i,
     /\b(cp link|child porn|loli porn|underage porn)\b/i,
+    /\b(buy (cocaine|heroin|meth)|sell (drugs|weapons|guns))\b/i,
   ],
 }
 
 function detectByPattern(text: string): string[] {
   const found = new Set<string>()
-  for (const [category, patterns] of Object.entries(PATTERNS)) {
-    if (patterns.some(p => p.test(text))) found.add(category)
+  for (const [cat, patterns] of Object.entries(PATTERNS)) {
+    if (patterns.some(p => p.test(text))) found.add(cat)
   }
   return [...found]
 }
 
-// ─── Sightengine via URL pública ──────────────────────────────────────────────
-async function checkImageByUrl(url: string, apiUser: string, apiSecret: string): Promise<string[]> {
-  try {
-    const params = new URLSearchParams({
-      url,
-      models:     'nudity-2.1,weapon,violence,gore-2.0,self-harm',
-      api_user:   apiUser,
-      api_secret: apiSecret,
-    })
-    const res  = await fetch(`https://api.sightengine.com/1.0/check.json?${params}`)
-    const data = await res.json()
-    console.log('[moderate] SE url:', JSON.stringify(data).slice(0, 300))
-    return parseSightengine(data)
-  } catch (err) {
-    console.warn('[moderate] SE url erro:', err)
-    return []
+// ─── Hugging Face — multilíngue, qualquer idioma ─────────────────────────────
+// Modelos usados em cascata:
+//   1. unitary/multilingual-toxic-xlm-roberta  → treinado em 8 idiomas
+//   2. unitary/toxic-bert                       → fallback inglês/universal
+async function checkHuggingFace(text: string, hfKey: string): Promise<string[]> {
+  const models = [
+    'unitary/multilingual-toxic-xlm-roberta',  // PT, EN, ES, DE, FR, IT, AR, ZH
+    'unitary/toxic-bert',                       // EN universal fallback
+  ]
+
+  for (const model of models) {
+    try {
+      const res = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+        method:  'POST',
+        headers: {
+          'Authorization': `Bearer ${hfKey}`,
+          'Content-Type':  'application/json',
+        },
+        body: JSON.stringify({ inputs: text }),
+      })
+
+      if (!res.ok) {
+        console.warn(`[moderate] HF ${model} status ${res.status}`)
+        continue
+      }
+
+      const data = await res.json()
+
+      // Modelo ainda carregando (cold start HF free tier)
+      if (data?.error?.includes('loading')) {
+        console.warn(`[moderate] HF ${model} carregando, aguarda...`)
+        await new Promise(r => setTimeout(r, 3000))
+        continue
+      }
+
+      console.log(`[moderate] HF ${model}:`, JSON.stringify(data).slice(0, 300))
+
+      // Resposta: [[{label, score}, ...]] ou [{label, score}, ...]
+      const results: {label: string; score: number}[] = Array.isArray(data[0]) ? data[0] : (Array.isArray(data) ? data : [])
+      const cats: string[] = []
+      const THRESHOLD = 0.75
+
+      for (const item of results) {
+        const label = (item.label || '').toLowerCase()
+        const score = item.score || 0
+        if (score < THRESHOLD) continue
+
+        if (label.includes('toxic') || label.includes('insult') || label.includes('obscene')) cats.push('harassment')
+        if (label.includes('threat'))                cats.push('harassment/threatening')
+        if (label.includes('identity_hate') || label.includes('hate')) cats.push('hate')
+        if (label.includes('sexual'))                cats.push('sexual')
+        if (label.includes('self'))                  cats.push('self-harm')
+        if (label.includes('violence'))              cats.push('violence')
+      }
+
+      // Se chegou aqui com resposta válida, retorna (não tenta próximo modelo)
+      if (results.length > 0) return [...new Set(cats)]
+
+    } catch (err) {
+      console.warn(`[moderate] HF ${model} erro:`, err)
+    }
   }
+
+  return []
 }
 
-// ─── Sightengine via base64 — converte para Blob e envia multipart correto ────
-async function checkImageByBase64(base64: string, apiUser: string, apiSecret: string): Promise<string[]> {
+// ─── Sightengine — moderação de IMAGEM ───────────────────────────────────────
+async function checkImageByUrl(url: string, user: string, secret: string): Promise<string[]> {
   try {
-    // Extrai mime type e dados
-    const match   = base64.match(/^data:([^;]+);base64,(.+)$/)
-    const mime    = match?.[1] ?? 'image/jpeg'
-    const rawB64  = match?.[2] ?? base64
-    const binary  = atob(rawB64)
-    const bytes   = new Uint8Array(binary.length)
+    const params = new URLSearchParams({ url, models: 'nudity-2.1,weapon,violence,gore-2.0,self-harm', api_user: user, api_secret: secret })
+    const res  = await fetch(`https://api.sightengine.com/1.0/check.json?${params}`)
+    const data = await res.json()
+    return parseSightengine(data)
+  } catch { return [] }
+}
+
+async function checkImageByBase64(base64: string, user: string, secret: string): Promise<string[]> {
+  try {
+    const match  = base64.match(/^data:([^;]+);base64,(.+)$/)
+    const mime   = match?.[1] ?? 'image/jpeg'
+    const raw    = match?.[2] ?? base64
+    const binary = atob(raw)
+    const bytes  = new Uint8Array(binary.length)
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
 
-    // Cria o Blob e adiciona ao FormData com a chave 'media' exigida pelo Sightengine
-    const blob = new Blob([bytes], { type: mime })
     const form = new FormData()
-    form.append('media',      blob, 'image.jpg')
+    form.append('media',      new Blob([bytes], { type: mime }), 'image.jpg')
     form.append('models',     'nudity-2.1,weapon,violence,gore-2.0,self-harm')
-    form.append('api_user',   apiUser)
-    form.append('api_secret', apiSecret)
+    form.append('api_user',   user)
+    form.append('api_secret', secret)
 
     const res  = await fetch('https://api.sightengine.com/1.0/check.json', { method: 'POST', body: form })
     const data = await res.json()
     console.log('[moderate] SE base64:', JSON.stringify(data).slice(0, 300))
     return parseSightengine(data)
-  } catch (err) {
-    console.warn('[moderate] SE base64 erro:', err)
-    return []
-  }
+  } catch (err) { console.warn('[moderate] SE base64 erro:', err); return [] }
 }
 
 function parseSightengine(data: Record<string, unknown>): string[] {
-  if ((data as { status?: string }).status !== 'success') {
-    console.warn('[moderate] SE falhou:', JSON.stringify(data).slice(0, 200))
+  if ((data as {status?: string}).status !== 'success') {
+    console.warn('[moderate] SE falhou:', JSON.stringify(data).slice(0, 150))
     return []
   }
   const cats: string[] = []
-  const T = 0.7
-  const nudity    = (data.nudity    as Record<string, number>) ?? {}
-  const violence  = (data.violence  as Record<string, number>) ?? {}
-  const gore      = (data.gore      as Record<string, number>) ?? {}
-  const selfHarm  = (data['self-harm'] as Record<string, number>) ?? {}
-  const weapon    = (data.weapon    as { classes?: Record<string, number> }) ?? {}
+  const T  = 0.7
+  const n  = (data.nudity    as Record<string,number>) ?? {}
+  const v  = (data.violence  as Record<string,number>) ?? {}
+  const g  = (data.gore      as Record<string,number>) ?? {}
+  const sh = (data['self-harm'] as Record<string,number>) ?? {}
+  const w  = (data.weapon    as {classes?: Record<string,number>}) ?? {}
 
-  if ((nudity.sexual_activity ?? 0) > T) cats.push('sexual')
-  if ((nudity.sexual_display  ?? 0) > T) cats.push('sexual')
-  if ((nudity.erotica         ?? 0) > T) cats.push('sexual')
-  if ((violence.prob          ?? 0) > T) cats.push('violence')
-  if ((gore.prob              ?? 0) > T) cats.push('violence/graphic')
-  if ((selfHarm.prob          ?? 0) > T) cats.push('self-harm')
-  if ((weapon.classes?.firearm ?? 0) > T) cats.push('violence')
+  if ((n.sexual_activity ?? 0) > T) cats.push('sexual')
+  if ((n.sexual_display  ?? 0) > T) cats.push('sexual')
+  if ((n.erotica         ?? 0) > T) cats.push('sexual')
+  if ((v.prob            ?? 0) > T) cats.push('violence')
+  if ((g.prob            ?? 0) > T) cats.push('violence/graphic')
+  if ((sh.prob           ?? 0) > T) cats.push('self-harm')
+  if ((w.classes?.firearm ?? 0) > T) cats.push('violence')
 
   return [...new Set(cats)]
 }
@@ -153,10 +194,11 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS })
   if (req.method !== 'POST')   return json({ error: 'Method not allowed' }, 405)
 
-  const SE_USER   = Deno.env.get('SIGHTENGINE_USER')   ?? ''
-  const SE_SECRET = Deno.env.get('SIGHTENGINE_SECRET') ?? ''
+  const HF_KEY    = Deno.env.get('HUGGINGFACE_API_KEY') ?? ''
+  const SE_USER   = Deno.env.get('SIGHTENGINE_USER')    ?? ''
+  const SE_SECRET = Deno.env.get('SIGHTENGINE_SECRET')  ?? ''
 
-  let input: { type: string; text?: string; image_url?: { url: string } }[] = []
+  let input: {type: string; text?: string; image_url?: {url: string}}[] = []
   try {
     const body = await req.json()
     input = body.input ?? []
@@ -164,30 +206,41 @@ serve(async (req) => {
     return json({ flagged: false, categories: [] })
   }
 
-  const allCategories: string[] = []
+  const allCats: string[] = []
 
   for (const item of input) {
+    // ── Texto ──────────────────────────────────────────────────────────────
     if (item.type === 'text' && item.text) {
-      const cats = detectByPattern(item.text)
-      console.log('[moderate] texto cats:', cats, '|', item.text.slice(0, 60))
-      allCategories.push(...cats)
+      const text = item.text
+
+      // 1. Padrões locais — instantâneo
+      const patternCats = detectByPattern(text)
+      allCats.push(...patternCats)
+      console.log('[moderate] padrões:', patternCats, '|', text.slice(0, 60))
+
+      // 2. Hugging Face — só chama se tiver chave e padrões não detectaram nada
+      // (economiza chamadas de API para textos claramente ofensivos)
+      if (HF_KEY && patternCats.length === 0) {
+        const hfCats = await checkHuggingFace(text, HF_KEY)
+        allCats.push(...hfCats)
+        console.log('[moderate] HF cats:', hfCats)
+      }
     }
 
+    // ── Imagem ─────────────────────────────────────────────────────────────
     if (item.type === 'image_url' && item.image_url?.url) {
       const url = item.image_url.url
       if (SE_USER && SE_SECRET) {
         const cats = url.startsWith('data:')
           ? await checkImageByBase64(url, SE_USER, SE_SECRET)
           : await checkImageByUrl(url, SE_USER, SE_SECRET)
+        allCats.push(...cats)
         console.log('[moderate] imagem cats:', cats)
-        allCategories.push(...cats)
-      } else {
-        console.warn('[moderate] Sightengine não configurado')
       }
     }
   }
 
-  const unique  = [...new Set(allCategories)]
+  const unique  = [...new Set(allCats)]
   const flagged = unique.length > 0
   console.log('[moderate] FINAL — flagged:', flagged, '| cats:', unique)
   return json({ flagged, categories: unique })
