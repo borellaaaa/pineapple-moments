@@ -14,7 +14,8 @@ export default function Profile() {
   const [loading,           setLoading]           = useState(true)
   const [saving,            setSaving]            = useState(false)
   const [deleting,          setDeleting]          = useState(false)
-  const [form,              setForm]              = useState({ display_name:'', username:'', bio:'', avatar_emoji:'🍍' })
+  const [form,              setForm]              = useState({ display_name:'', username:'', bio:'', avatar_emoji:'🍍', birth_date:'' })
+  const [isStaff,           setIsStaff]           = useState(false)
   const [usernameStatus,    setUsernameStatus]    = useState(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteInput,       setDeleteInput]       = useState('')
@@ -29,7 +30,11 @@ export default function Profile() {
         username:     data.username     || '',
         bio:          data.bio          || '',
         avatar_emoji: data.avatar_emoji || '🍍',
+        birth_date:   data.birth_date   || '',
       })
+      // Checar se é admin/staff
+      const { data: staffData } = await supabase.from('admin_staff').select('role').eq('user_id', user.id).maybeSingle()
+      setIsStaff(!!staffData)
       setLoading(false)
     })
   }, [user])
@@ -62,6 +67,7 @@ export default function Profile() {
       username:     form.username.trim() || null,
       bio:          form.bio.trim(),
       avatar_emoji: form.avatar_emoji,
+      birth_date:   form.birth_date || null,
     })
     setSaving(false)
     if (error) { toast('Erro ao salvar perfil 😢','error'); return }
@@ -163,6 +169,13 @@ export default function Profile() {
               <p style={{ fontSize:11, marginTop:4, color:'var(--dark-muted)' }}>Usado para receber cartinhas 💌</p>
             </div>
             <div>
+              <label style={{ display:'block', fontWeight:700, fontSize:12, color:'var(--dark)', marginBottom:6 }}>Data de nascimento 🎂</label>
+              <input type="date" className="input" value={form.birth_date}
+                max={new Date().toISOString().split('T')[0]}
+                onChange={e => setForm(f => ({...f, birth_date: e.target.value}))} />
+              <p style={{ fontSize:11, color:'var(--dark-muted)', marginTop:3 }}>Necessária para conformidade com a LGPD</p>
+            </div>
+            <div>
               <label style={{ display:'block', fontWeight:700, fontSize:12, color:'var(--dark)', marginBottom:6 }}>Bio (opcional)</label>
               <textarea className="input" value={form.bio} onChange={e => setForm(f => ({...f,bio:e.target.value}))} placeholder="Conte um pouco sobre você..." maxLength={160} rows={3}/>
               <p style={{ fontSize:11, color:'var(--dark-muted)', marginTop:4, textAlign:'right' }}>{form.bio.length}/160</p>
@@ -174,6 +187,40 @@ export default function Profile() {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Admin link */}
+        {isStaff && (
+          <div style={{ background:'white', borderRadius:'var(--radius)', padding:20, boxShadow:'var(--shadow)', marginBottom:20, display:'flex', alignItems:'center', justifyContent:'space-between', animation:'fadeInUp 0.4s ease 0.15s both' }}>
+            <div>
+              <p style={{ fontWeight:700, fontSize:14, color:'var(--dark)' }}>🛡️ Painel Administrativo</p>
+              <p style={{ fontSize:12, color:'var(--dark-muted)', fontFamily:'var(--font-cute)' }}>Gerencie usuários e conteúdo da plataforma</p>
+            </div>
+            <a href="/admin" style={{ textDecoration:'none' }}>
+              <button className="btn btn-primary btn-sm">Acessar Admin</button>
+            </a>
+          </div>
+        )}
+
+        {/* Exportar dados */}
+        <div style={{ background:'white', borderRadius:'var(--radius)', padding:28, boxShadow:'var(--shadow)', marginBottom:20, animation:'fadeInUp 0.4s ease 0.18s both' }}>
+          <h2 style={{ fontFamily:'var(--font-title)', fontSize:18, color:'var(--dark)', marginBottom:10 }}>Seus dados 📦</h2>
+          <p style={{ color:'var(--dark-muted)', fontSize:13, fontFamily:'var(--font-cute)', marginBottom:16, lineHeight:1.6 }}>
+            Conforme a LGPD, você pode solicitar uma cópia de todos os seus dados pessoais armazenados na plataforma.
+          </p>
+          <button className="btn btn-ghost btn-sm" onClick={async () => {
+            const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+            const { data: albums } = await supabase.from('albums').select('name, description, created_at').eq('owner_id', user.id)
+            const { data: letters } = await supabase.from('letters').select('message, created_at').eq('sender_id', user.id)
+            const exportData = { perfil: profile, albuns: albums, cartinhas_enviadas: letters, exportado_em: new Date().toISOString() }
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a'); a.href = url; a.download = 'meus-dados-pineapple.json'; a.click()
+            URL.revokeObjectURL(url)
+            toast('Dados exportados! 📦', 'success')
+          }}>
+            📥 Exportar meus dados (JSON)
+          </button>
         </div>
 
         {/* Danger Zone */}

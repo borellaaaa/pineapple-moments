@@ -616,7 +616,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
       {/* ── Canvas ── */}
       <div
         ref={canvasRef}
-        style={{ width:'min(595px,100%)', aspectRatio:`${CANVAS_W}/${CANVAS_H}`, borderRadius:12, ...canvasBg, position:'relative', overflow:'hidden', boxShadow:'0 10px 48px rgba(27,58,31,0.16)', touchAction:'none', flexShrink:0, cursor: isDrawMode ? 'crosshair' : 'default' }}
+        style={{ width:'min(595px,100%)', aspectRatio:`${CANVAS_W}/${CANVAS_H}`, borderRadius:12, ...canvasBg, position:'relative', overflow:'hidden', boxShadow:'0 10px 48px rgba(27,58,31,0.16)', touchAction: isDrawMode ? 'none' : 'pan-y', flexShrink:0, cursor: isDrawMode ? 'crosshair' : 'default', WebkitUserSelect:'none', userSelect:'none' }}
         onClick={() => { if (!isDrawMode) { setSelected(null); setPanel('none') } }}
       >
         {/* Elementos */}
@@ -652,7 +652,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
                   <div key={h.id}
                     onMouseDown={e => startResize(e, el.id, h.id)}
                     onTouchStart={e => startResize(e, el.id, h.id)}
-                    style={{ position:'absolute', top:h.top, left:h.left, transform:'translate(-50%,-50%)', width:12, height:12, background:'white', border:'2px solid #6B4DE6', borderRadius:2, cursor:h.cursor, zIndex:30 }}/>
+                    style={{ position:'absolute', top:h.top, left:h.left, transform:'translate(-50%,-50%)', width:20, height:20, background:'white', border:'2px solid #6B4DE6', borderRadius:4, cursor:h.cursor, zIndex:30, touchAction:'none' }}/>
                 ))}
                 {el.type === 'photo' && (
                   <div onMouseDown={e => startRotate(e, el)}
