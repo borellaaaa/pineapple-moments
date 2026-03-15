@@ -68,13 +68,15 @@ function detectByPattern(text: string): string[] {
 }
 
 // ─── Hugging Face — multilíngue, qualquer idioma ─────────────────────────────
-// Modelos usados em cascata:
-//   1. unitary/multilingual-toxic-xlm-roberta  → treinado em 8 idiomas
-//   2. unitary/toxic-bert                       → fallback inglês/universal
+// Modelos ativos (verificados março 2025):
+//   1. cardiffnlp/twitter-roberta-base-hate-latest → hate speech multilíngue
+//   2. facebook/roberta-hate-speech-dynabench-r4-target → EN hate/toxicidade
+//   3. martin-ha/toxic-comment-model → EN toxicidade geral
 async function checkHuggingFace(text: string, hfKey: string): Promise<string[]> {
   const models = [
-    'unitary/multilingual-toxic-xlm-roberta',  // PT, EN, ES, DE, FR, IT, AR, ZH
-    'unitary/toxic-bert',                       // EN universal fallback
+    'cardiffnlp/twitter-roberta-base-hate-latest',
+    'martin-ha/toxic-comment-model',
+    'facebook/roberta-hate-speech-dynabench-r4-target',
   ]
 
   for (const model of models) {
@@ -93,19 +95,24 @@ async function checkHuggingFace(text: string, hfKey: string): Promise<string[]> 
         continue
       }
 
-      const data = await res.json()
+      const raw = await res.text()
+      console.log(`[moderate] HF ${model} raw:`, raw.slice(0, 300))
 
-      // Modelo ainda carregando (cold start HF free tier)
-      if (data?.error?.includes('loading')) {
-        console.warn(`[moderate] HF ${model} carregando, aguarda...`)
-        await new Promise(r => setTimeout(r, 3000))
+      let data: unknown
+      try { data = JSON.parse(raw) } catch { continue }
+
+      // Modelo carregando — cold start free tier
+      if ((data as {error?: string})?.error?.includes('loading')) {
+        console.warn(`[moderate] HF ${model} carregando...`)
         continue
       }
 
-      console.log(`[moderate] HF ${model}:`, JSON.stringify(data).slice(0, 300))
+      // Normaliza resposta: pode ser [[...]] ou [...]
+      const arr = Array.isArray(data) ? data : []
+      const results: {label: string; score: number}[] = Array.isArray(arr[0]) ? arr[0] : arr
 
-      // Resposta: [[{label, score}, ...]] ou [{label, score}, ...]
-      const results: {label: string; score: number}[] = Array.isArray(data[0]) ? data[0] : (Array.isArray(data) ? data : [])
+      if (results.length === 0) continue
+
       const cats: string[] = []
       const THRESHOLD = 0.60
 
@@ -114,23 +121,18 @@ async function checkHuggingFace(text: string, hfKey: string): Promise<string[]> 
         const score = item.score || 0
         if (score < THRESHOLD) continue
 
-        console.log(`[moderate] HF label: ${label} score: ${score.toFixed(3)}`)
+        console.log(`[moderate] HF label="${label}" score=${score.toFixed(3)}`)
 
-        // Labels do toxic-bert e multilingual-toxic-xlm-roberta
-        if (label === 'toxic' || label.includes('toxic'))     cats.push('harassment')
-        if (label.includes('insult'))                          cats.push('harassment')
-        if (label.includes('obscene'))                         cats.push('sexual')
-        if (label.includes('threat'))                          cats.push('harassment/threatening')
-        if (label.includes('identity_hate') || label === 'hate') cats.push('hate')
-        if (label.includes('sexual'))                          cats.push('sexual')
-        if (label.includes('self'))                            cats.push('self-harm')
-        if (label.includes('violence') || label.includes('violent')) cats.push('violence')
-        // Labels do multilingual model
-        if (label === '1' || label === 'offensive')            cats.push('harassment')
-        if (label === 'hate_speech')                           cats.push('hate')
+        if (['hate', 'hate speech', 'hateful', 'offensive', 'toxic', '1', 'label_1'].some(l => label.includes(l)))
+          cats.push('harassment')
+        if (label.includes('threat'))                              cats.push('harassment/threatening')
+        if (label.includes('insult') || label.includes('obscene')) cats.push('harassment')
+        if (label.includes('sexual') || label.includes('porn'))    cats.push('sexual')
+        if (label.includes('violen'))                              cats.push('violence')
+        if (label.includes('self') || label.includes('suicide'))   cats.push('self-harm')
+        if (label.includes('identity') || label.includes('race'))  cats.push('hate')
       }
 
-      // Se chegou aqui com resposta válida, retorna (não tenta próximo modelo)
       if (results.length > 0) return [...new Set(cats)]
 
     } catch (err) {
