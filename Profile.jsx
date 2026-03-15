@@ -19,6 +19,7 @@ export default function Profile() {
   const [usernameStatus,    setUsernameStatus]    = useState(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteInput,       setDeleteInput]       = useState('')
+  const [deletionScheduled, setDeletionScheduled] = useState(null)
   const [showAvatars,       setShowAvatars]       = useState(false)
   const usernameTimer = useRef(null)
 
@@ -36,6 +37,9 @@ export default function Profile() {
       // Checar se é admin/staff
       const { data: staffData } = await supabase.from('admin_staff').select('role').eq('user_id', user.id).maybeSingle()
       setIsStaff(!!staffData)
+      // Verificar se tem exclusão agendada
+      const { data: schedData } = await supabase.from('deletion_schedule').select('scheduled_for').eq('user_id', user.id).eq('executed', false).maybeSingle()
+      setDeletionScheduled(schedData?.scheduled_for || null)
       setLoading(false)
     }
     load()
@@ -77,38 +81,42 @@ export default function Profile() {
     setUsernameStatus(null)
   }
 
-  // ── EXCLUSÃO TOTAL DA CONTA ──────────────────────────
-  // Usa RPC com SECURITY DEFINER que roda no servidor com permissões
-  // para deletar o registro em auth.users (o client SDK não pode fazer isso).
-  // Isso garante que username, perfil, álbuns, cartinhas e o login somem de verdade.
+  // ── AGENDAMENTO DE EXCLUSÃO (30 dias conforme LGPD) ─────────────────────────
   const handleDeleteAccount = async () => {
     if (deleteInput !== 'DELETAR') return
     setDeleting(true)
     try {
-      // Tenta via RPC primeiro (deleta tudo incluindo auth.users)
-      const { error } = await supabase.rpc('delete_user_account')
-      if (error) {
-        // Fallback: deleta dados manualmente se RPC não existir ainda
-        await supabase.from('letters').delete().eq('sender_id', user.id)
-        await supabase.from('letters').delete().eq('recipient_id', user.id)
-        await supabase.from('saved_albums').delete().eq('user_id', user.id)
-        const { data: userAlbums } = await supabase.from('albums').select('id').eq('owner_id', user.id)
-        if (userAlbums?.length > 0) {
-          await supabase.from('pages').delete().in('album_id', userAlbums.map(a => a.id))
-          await supabase.from('albums').delete().eq('owner_id', user.id)
-        }
-        await supabase.from('profiles').delete().eq('id', user.id)
+      const { data, error } = await supabase.rpc('schedule_account_deletion', {
+        reason_text: 'user_request'
+      })
+      if (error) throw error
+      // Deleta álbuns e conteúdo imediatamente (conforme política)
+      const { data: userAlbums } = await supabase.from('albums').select('id').eq('owner_id', user.id)
+      if (userAlbums?.length > 0) {
+        await supabase.from('pages').delete().in('album_id', userAlbums.map(a => a.id))
+        await supabase.from('albums').delete().eq('owner_id', user.id)
       }
-      // Remove fotos do storage
+      // Remove fotos do storage imediatamente
       const { data: files } = await supabase.storage.from('album-photos').list(user.id)
       if (files?.length > 0) {
         await supabase.storage.from('album-photos').remove(files.map(f => `${user.id}/${f.name}`))
       }
+      setDeletionScheduled(data?.scheduled_for)
+      setShowDeleteConfirm(false)
+      setDeleteInput('')
+      toast('Exclusão agendada para 30 dias. Você pode cancelar até lá. 📅', 'success')
     } catch (err) {
-      console.error('Erro ao deletar conta:', err)
+      toast('Erro ao agendar exclusão 😢', 'error')
+      console.error(err)
     }
-    await signOut()
-    navigate('/')
+    setDeleting(false)
+  }
+
+  const handleCancelDeletion = async () => {
+    const { error } = await supabase.rpc('cancel_account_deletion')
+    if (error) { toast('Erro ao cancelar 😢', 'error'); return }
+    setDeletionScheduled(null)
+    toast('Exclusão cancelada! Sua conta foi mantida. ✅', 'success')
   }
 
   if (loading) return <div className="loader" style={{ marginTop:80 }}/>
@@ -228,25 +236,44 @@ export default function Profile() {
         {/* Danger Zone */}
         <div style={{ background:'white', borderRadius:'var(--radius)', padding:28, boxShadow:'var(--shadow)', border:'2px solid rgba(229,57,53,0.12)', animation:'fadeInUp 0.4s ease 0.2s both' }}>
           <h2 style={{ fontFamily:'var(--font-title)', fontSize:18, color:'var(--red)', marginBottom:10 }}>Zona de perigo ⚠️</h2>
-          <p style={{ color:'var(--dark-muted)', fontSize:13, fontFamily:'var(--font-cute)', marginBottom:16, lineHeight:1.6 }}>
-            Ao deletar sua conta, <strong>todos os seus dados serão apagados permanentemente</strong>: álbuns, páginas, fotos, cartinhas, nome de usuário e perfil. Esta ação não pode ser desfeita.
-          </p>
-          {!showDeleteConfirm ? (
-            <button className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)}>🗑️ Deletar minha conta</button>
-          ) : (
-            <div style={{ background:'rgba(229,57,53,0.05)', borderRadius:'var(--radius-sm)', padding:16 }}>
-              <p style={{ fontWeight:700, fontSize:13, marginBottom:10, color:'var(--red)' }}>
-                Digite <strong>DELETAR</strong> para confirmar a exclusão total:
+
+          {deletionScheduled ? (
+            <div style={{ background:'#fff8e1', border:'2px solid #ffe082', borderRadius:10, padding:16, marginBottom:16 }}>
+              <p style={{ fontWeight:700, fontSize:14, color:'#856404', marginBottom:6 }}>⏳ Exclusão agendada</p>
+              <p style={{ fontSize:13, color:'#555', marginBottom:12, lineHeight:1.6 }}>
+                Sua conta será excluída em <strong>{new Date(deletionScheduled).toLocaleDateString('pt-BR')}</strong>.
+                Seus álbuns e conteúdo já foram removidos. Dados pessoais serão apagados na data agendada conforme a LGPD.
               </p>
-              <input className="input input-error" value={deleteInput} onChange={e => setDeleteInput(e.target.value)} placeholder="DELETAR" style={{ marginBottom:10 }}/>
-              <div style={{ display:'flex', gap:10 }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => { setShowDeleteConfirm(false); setDeleteInput('') }}>Cancelar</button>
-                <button className="btn btn-sm" style={{ background:'var(--red)', color:'white' }}
-                  onClick={handleDeleteAccount} disabled={deleteInput!=='DELETAR'||deleting}>
-                  {deleting ? 'Deletando tudo...' : 'Confirmar exclusão total'}
-                </button>
-              </div>
+              <button className="btn btn-ghost btn-sm" onClick={handleCancelDeletion}>
+                ↩️ Cancelar exclusão e manter conta
+              </button>
             </div>
+          ) : (
+            <>
+              <p style={{ color:'var(--dark-muted)', fontSize:13, fontFamily:'var(--font-cute)', marginBottom:8, lineHeight:1.6 }}>
+                Ao solicitar exclusão: <strong>álbuns e conteúdo são removidos imediatamente</strong>. Seus dados pessoais serão apagados em até <strong>30 dias</strong> conforme a LGPD.
+              </p>
+              <p style={{ color:'var(--dark-muted)', fontSize:12, fontFamily:'var(--font-cute)', marginBottom:16, lineHeight:1.5 }}>
+                📌 Registros de moderação são mantidos por até 2 anos por obrigação legal.
+              </p>
+              {!showDeleteConfirm ? (
+                <button className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)}>🗑️ Solicitar exclusão da conta</button>
+              ) : (
+                <div style={{ background:'rgba(229,57,53,0.05)', borderRadius:'var(--radius-sm)', padding:16 }}>
+                  <p style={{ fontWeight:700, fontSize:13, marginBottom:10, color:'var(--red)' }}>
+                    Digite <strong>DELETAR</strong> para confirmar:
+                  </p>
+                  <input className="input input-error" value={deleteInput} onChange={e => setDeleteInput(e.target.value)} placeholder="DELETAR" style={{ marginBottom:10 }}/>
+                  <div style={{ display:'flex', gap:10 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => { setShowDeleteConfirm(false); setDeleteInput('') }}>Cancelar</button>
+                    <button className="btn btn-sm" style={{ background:'var(--red)', color:'white' }}
+                      onClick={handleDeleteAccount} disabled={deleteInput!=='DELETAR'||deleting}>
+                      {deleting ? 'Agendando...' : 'Confirmar exclusão'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>
