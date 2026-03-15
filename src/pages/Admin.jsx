@@ -131,15 +131,93 @@ export default function Admin() {
   }
 
   // ── Gerar relatório para autoridades ──────────────────────────────────────
-  const generateAuthorityReport = (report) => {
+  const generateAuthorityReport = async (report) => {
     const now = new Date()
     const formatDate = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—'
     const reportType = {
-      album: 'Álbum digital',
-      user: 'Perfil de usuário',
-      letter: 'Mensagem (cartinha)',
-      page: 'Página de álbum',
+      album: 'Álbum digital', user: 'Perfil de usuário',
+      letter: 'Mensagem (cartinha)', page: 'Página de álbum',
     }[report.target_type] || report.target_type
+
+    // Busca dados do álbum, fotos e usuário denunciado
+    let albumPhotos = []
+    let targetEmail = '—'
+    let targetDisplayName = '—'
+    let targetUsername = '—'
+    let albumName = '—'
+
+    try {
+      if (report.target_type === 'album' && report.target_id) {
+        // Busca álbum com dono
+        const { data: album } = await supabase
+          .from('albums')
+          .select('name, owner_id, profiles(display_name, username)')
+          .eq('id', report.target_id)
+          .maybeSingle()
+
+        if (album) {
+          albumName = album.name || '—'
+          targetDisplayName = album.profiles?.display_name || '—'
+          targetUsername = album.profiles?.username || '—'
+
+          // Busca email do dono via admin_get_users
+          const { data: userList } = await supabase.rpc('admin_get_users', {
+            search_term: targetUsername, page_num: 1, page_size: 1
+          })
+          if (userList?.[0]) targetEmail = userList[0].email || '—'
+
+          // Busca páginas do álbum para pegar fotos
+          const { data: pages } = await supabase
+            .from('pages')
+            .select('svg_paths, bg_color')
+            .eq('album_id', report.target_id)
+            .limit(20)
+
+          if (pages) {
+            pages.forEach(page => {
+              try {
+                const paths = typeof page.svg_paths === 'string'
+                  ? JSON.parse(page.svg_paths) : (page.svg_paths || [])
+                paths.forEach(el => {
+                  if (el.type === 'image' && el.src && el.src.startsWith('http')) {
+                    albumPhotos.push(el.src)
+                  }
+                })
+              } catch(_) {}
+            })
+          }
+        }
+      }
+
+      if (report.target_type === 'user' && report.target_id) {
+        const { data: userList } = await supabase.rpc('admin_get_users', {
+          search_term: null, page_num: 1, page_size: 1
+        })
+        // Busca direto pelo ID
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('display_name, username')
+          .eq('id', report.target_id)
+          .maybeSingle()
+        if (profile) {
+          targetDisplayName = profile.display_name || '—'
+          targetUsername = profile.username || '—'
+          const { data: ul } = await supabase.rpc('admin_get_users', {
+            search_term: profile.username, page_num: 1, page_size: 1
+          })
+          if (ul?.[0]) targetEmail = ul[0].email || '—'
+        }
+      }
+    } catch(e) { console.warn('Erro ao buscar dados para relatório:', e) }
+
+    // Gera HTML das fotos
+    const photosHtml = albumPhotos.length > 0
+      ? albumPhotos.map((src, i) => `
+          <div style="display:inline-block;margin:4px;border:2px solid #ddd;border-radius:6px;overflow:hidden;vertical-align:top">
+            <img src="${src}" style="width:180px;height:130px;object-fit:cover;display:block" onerror="this.parentElement.style.display='none'" />
+            <div style="font-size:10px;color:#888;padding:3px 6px;background:#f9f9f9">Foto ${i+1}</div>
+          </div>`).join('')
+      : '<p style="color:#888;font-size:12px;font-style:italic">Nenhuma foto encontrada no álbum — pode ter sido removida anteriormente.</p>'
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -148,7 +226,7 @@ export default function Admin() {
   <title>Relatório de Conteúdo Ilícito — Pineapple Moments</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; font-size: 13px; color: #111; padding: 40px; max-width: 800px; margin: 0 auto; }
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #111; padding: 40px; max-width: 820px; margin: 0 auto; }
     .header { border-bottom: 3px solid #1B3A1F; padding-bottom: 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; }
     .logo { font-size: 22px; font-weight: bold; color: #1B3A1F; }
     .doc-title { font-size: 18px; font-weight: bold; text-align: center; margin: 24px 0 8px; color: #c62828; text-transform: uppercase; letter-spacing: 1px; }
@@ -156,18 +234,19 @@ export default function Admin() {
     .section { margin-bottom: 20px; }
     .section-title { font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #555; border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-bottom: 12px; }
     .row { display: flex; gap: 8px; margin-bottom: 8px; }
-    .label { font-weight: bold; min-width: 200px; color: #333; font-size: 12px; }
+    .label { font-weight: bold; min-width: 220px; color: #333; font-size: 12px; }
     .value { color: #111; font-size: 12px; flex: 1; }
-    .highlight { background: #fff3cd; padding: 12px 16px; border-left: 4px solid #f5a623; border-radius: 4px; margin: 16px 0; }
+    .highlight { background: #fff3cd; padding: 12px 16px; border-left: 4px solid #f5a623; border-radius: 4px; margin: 16px 0; font-size: 12px; line-height: 1.6; }
     .legal-box { background: #fdecea; padding: 14px 16px; border-left: 4px solid #c62828; border-radius: 4px; margin: 16px 0; font-size: 12px; line-height: 1.6; }
+    .photos-box { background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 8px 0; }
     .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #ddd; font-size: 11px; color: #888; }
     .signature-area { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
     .sig-line { border-top: 1px solid #333; padding-top: 6px; font-size: 11px; color: #555; text-align: center; margin-top: 40px; }
-    .authorities { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .authorities { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .auth-card { border: 1px solid #ddd; padding: 12px; border-radius: 6px; }
     .auth-name { font-weight: bold; font-size: 12px; color: #1B3A1F; }
     .auth-contact { font-size: 11px; color: #555; margin-top: 4px; }
-    @media print { body { padding: 20px; } .no-print { display: none; } }
+    @media print { .no-print { display: none; } }
   </style>
 </head>
 <body>
@@ -178,8 +257,8 @@ export default function Admin() {
       <div style="font-size:11px;color:#555;margin-top:4px">pineapple-moments.vercel.app</div>
     </div>
     <div style="text-align:right;font-size:11px;color:#555">
-      <div>Gerado em: ${now.toLocaleString('pt-BR')}</div>
-      <div>Protocolo: RPT-${report.id?.slice(0,8).toUpperCase()}</div>
+      <div>Gerado em: \${now.toLocaleString('pt-BR')}</div>
+      <div>Protocolo: RPT-\${report.id?.slice(0,8).toUpperCase()}</div>
     </div>
   </div>
 
@@ -194,75 +273,89 @@ export default function Admin() {
 
   <div class="section">
     <div class="section-title">1. Identificação da Denúncia</div>
-    <div class="row"><span class="label">Protocolo da Denúncia:</span><span class="value">${report.id}</span></div>
-    <div class="row"><span class="label">Data da Denúncia:</span><span class="value">${formatDate(report.created_at)}</span></div>
-    <div class="row"><span class="label">Tipo de Conteúdo:</span><span class="value">${reportType}</span></div>
-    <div class="row"><span class="label">ID do Conteúdo:</span><span class="value">${report.target_id}</span></div>
-    <div class="row"><span class="label">Motivo Reportado:</span><span class="value"><strong>${report.reason}</strong></span></div>
-    ${report.description ? `<div class="row"><span class="label">Descrição:</span><span class="value">${report.description}</span></div>` : ''}
+    <div class="row"><span class="label">Protocolo:</span><span class="value"><strong>RPT-\${report.id?.slice(0,8).toUpperCase()}</strong></span></div>
+    <div class="row"><span class="label">Data da Denúncia:</span><span class="value">\${formatDate(report.created_at)}</span></div>
+    <div class="row"><span class="label">Tipo de Conteúdo:</span><span class="value">\${reportType}</span></div>
+    <div class="row"><span class="label">ID do Conteúdo:</span><span class="value" style="font-family:monospace">\${report.target_id}</span></div>
+    \${albumName !== '—' ? '<div class=\"row\"><span class=\"label\">Nome do Álbum:</span><span class=\"value\">' + albumName + '</span></div>' : ''}
+    <div class="row"><span class="label">Motivo Reportado:</span><span class="value"><strong>\${report.reason}</strong></span></div>
+    \${report.description ? '<div class=\"row\"><span class=\"label\">Descrição:</span><span class=\"value\">' + report.description + '</span></div>' : ''}
   </div>
 
   <div class="section">
-    <div class="section-title">2. Usuário Denunciante</div>
-    <div class="row"><span class="label">ID do Denunciante:</span><span class="value">${report.reporter_id || 'Anônimo'}</span></div>
-    <div class="row"><span class="label">Username:</span><span class="value">@${report.reporter_username || '—'}</span></div>
+    <div class="section-title">2. Usuário Denunciado</div>
+    <div class="row"><span class="label">Nome completo / Apelido:</span><span class="value"><strong>\${targetDisplayName}</strong></span></div>
+    <div class="row"><span class="label">Nome de usuário:</span><span class="value">@\${targetUsername}</span></div>
+    <div class="row"><span class="label">E-mail cadastrado:</span><span class="value"><strong>\${targetEmail}</strong></span></div>
+    <div class="row"><span class="label">ID na plataforma:</span><span class="value" style="font-family:monospace">\${report.target_id}</span></div>
   </div>
 
   <div class="section">
-    <div class="section-title">3. Informações da Plataforma</div>
+    <div class="section-title">3. Usuário Denunciante</div>
+    <div class="row"><span class="label">Username:</span><span class="value">@\${report.reporter_username || 'Anônimo'}</span></div>
+    <div class="row"><span class="label">ID do Denunciante:</span><span class="value" style="font-family:monospace">\${report.reporter_id || '—'}</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">4. Evidências Visuais do Conteúdo</div>
+    <div class="photos-box">
+      \${photosHtml}
+    </div>
+    <p style="font-size:11px;color:#888;margin-top:6px">
+      Total de fotos encontradas: \${albumPhotos.length}. 
+      Todas as fotos do álbum são apresentadas como evidência do conteúdo denunciado.
+    </p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">5. Informações da Plataforma</div>
     <div class="row"><span class="label">Nome da Plataforma:</span><span class="value">Pineapple Moments</span></div>
     <div class="row"><span class="label">URL:</span><span class="value">https://pineapple-moments.vercel.app</span></div>
-    <div class="row"><span class="label">CNPJ/CPF Responsável:</span><span class="value">A preencher pelo responsável legal</span></div>
     <div class="row"><span class="label">E-mail do Responsável:</span><span class="value">rafaelborella49@gmail.com</span></div>
-    <div class="row"><span class="label">Data deste Relatório:</span><span class="value">${now.toLocaleString('pt-BR')}</span></div>
-    <div class="row"><span class="label">Ação Tomada:</span><span class="value">Conteúdo removido da plataforma imediatamente</span></div>
+    <div class="row"><span class="label">Data deste Relatório:</span><span class="value">\${now.toLocaleString('pt-BR')}</span></div>
+    <div class="row"><span class="label">Ação Tomada:</span><span class="value">Conteúdo removido e conta suspensa imediatamente</span></div>
   </div>
 
   <div class="highlight">
-    <strong>Observação do Operador:</strong> Assim que identificado o conteúdo, foram tomadas as seguintes medidas:
-    remoção imediata do conteúdo, suspensão da conta do usuário responsável e geração deste relatório
-    para encaminhamento às autoridades competentes conforme exigido por lei.
+    <strong>Declaração do Operador:</strong> Assim que identificado o conteúdo ilícito, foram tomadas as seguintes
+    medidas de forma imediata: (1) remoção do conteúdo da plataforma, (2) suspensão da conta do usuário responsável,
+    (3) geração deste relatório para encaminhamento às autoridades competentes. O operador cooperará plenamente
+    com as investigações fornecendo logs, IPs e demais dados técnicos mediante requisição judicial.
   </div>
 
   <div class="section">
-    <div class="section-title">4. Autoridades para Encaminhamento</div>
+    <div class="section-title">6. Autoridades Recomendadas</div>
     <div class="authorities">
       <div class="auth-card">
         <div class="auth-name">🏛️ Polícia Federal</div>
-        <div class="auth-contact">delegacia.dpf.gov.br<br>Para crimes federais, CSAM, tráfico</div>
+        <div class="auth-contact">delegacia.dpf.gov.br<br>Crimes federais, CSAM, tráfico online</div>
       </div>
       <div class="auth-card">
         <div class="auth-name">🛡️ SaferNet Brasil</div>
-        <div class="auth-contact">safernet.org.br/denuncie<br>Especializada em crimes online, CSAM</div>
+        <div class="auth-contact">safernet.org.br/denuncie<br>Especializada em crimes online e CSAM</div>
       </div>
       <div class="auth-card">
         <div class="auth-name">📞 Disque 100</div>
-        <div class="auth-contact">Direitos Humanos<br>Para casos envolvendo menores</div>
+        <div class="auth-contact">Direitos Humanos<br>Casos envolvendo menores de idade</div>
       </div>
       <div class="auth-card">
         <div class="auth-name">🏢 Polícia Civil</div>
-        <div class="auth-contact">Delegacia local<br>Para ameaças e crimes comuns</div>
+        <div class="auth-contact">Delegacia local<br>Ameaças, assédio e crimes comuns</div>
       </div>
     </div>
   </div>
 
   <div class="signature-area">
-    <div>
-      <div class="sig-line">Assinatura do Responsável Legal</div>
-      <div style="font-size:11px;color:#555;text-align:center;margin-top:4px">Nome / CPF</div>
-    </div>
-    <div>
-      <div class="sig-line">Data e Local</div>
-    </div>
+    <div><div class="sig-line">Assinatura do Responsável Legal</div><div style="font-size:11px;color:#555;text-align:center;margin-top:4px">Nome / CPF</div></div>
+    <div><div class="sig-line">Data e Local</div></div>
   </div>
 
   <div class="footer">
-    Este documento foi gerado automaticamente pelo sistema de moderação do Pineapple Moments em
-    ${now.toLocaleString('pt-BR')}. Protocolo: RPT-${report.id?.slice(0,8).toUpperCase()}.
-    Em caso de dúvidas: rafaelborella49@gmail.com
+    Documento gerado automaticamente pelo sistema de moderação do Pineapple Moments em \${now.toLocaleString('pt-BR')}.
+    Protocolo: RPT-\${report.id?.slice(0,8).toUpperCase()}. Contato: rafaelborella49@gmail.com
   </div>
 
-  <div class="no-print" style="margin-top:24px;text-align:center">
+  <div class="no-print" style="margin-top:24px;text-align:center;padding-bottom:40px">
     <button onclick="window.print()" style="padding:12px 28px;background:#1B3A1F;color:white;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer">
       🖨️ Imprimir / Salvar como PDF
     </button>
