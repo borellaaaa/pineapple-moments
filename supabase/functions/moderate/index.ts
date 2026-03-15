@@ -107,19 +107,27 @@ async function checkHuggingFace(text: string, hfKey: string): Promise<string[]> 
       // Resposta: [[{label, score}, ...]] ou [{label, score}, ...]
       const results: {label: string; score: number}[] = Array.isArray(data[0]) ? data[0] : (Array.isArray(data) ? data : [])
       const cats: string[] = []
-      const THRESHOLD = 0.75
+      const THRESHOLD = 0.60
 
       for (const item of results) {
         const label = (item.label || '').toLowerCase()
         const score = item.score || 0
         if (score < THRESHOLD) continue
 
-        if (label.includes('toxic') || label.includes('insult') || label.includes('obscene')) cats.push('harassment')
-        if (label.includes('threat'))                cats.push('harassment/threatening')
-        if (label.includes('identity_hate') || label.includes('hate')) cats.push('hate')
-        if (label.includes('sexual'))                cats.push('sexual')
-        if (label.includes('self'))                  cats.push('self-harm')
-        if (label.includes('violence'))              cats.push('violence')
+        console.log(`[moderate] HF label: ${label} score: ${score.toFixed(3)}`)
+
+        // Labels do toxic-bert e multilingual-toxic-xlm-roberta
+        if (label === 'toxic' || label.includes('toxic'))     cats.push('harassment')
+        if (label.includes('insult'))                          cats.push('harassment')
+        if (label.includes('obscene'))                         cats.push('sexual')
+        if (label.includes('threat'))                          cats.push('harassment/threatening')
+        if (label.includes('identity_hate') || label === 'hate') cats.push('hate')
+        if (label.includes('sexual'))                          cats.push('sexual')
+        if (label.includes('self'))                            cats.push('self-harm')
+        if (label.includes('violence') || label.includes('violent')) cats.push('violence')
+        // Labels do multilingual model
+        if (label === '1' || label === 'offensive')            cats.push('harassment')
+        if (label === 'hate_speech')                           cats.push('hate')
       }
 
       // Se chegou aqui com resposta válida, retorna (não tenta próximo modelo)
@@ -218,9 +226,8 @@ serve(async (req) => {
       allCats.push(...patternCats)
       console.log('[moderate] padrões:', patternCats, '|', text.slice(0, 60))
 
-      // 2. Hugging Face — só chama se tiver chave e padrões não detectaram nada
-      // (economiza chamadas de API para textos claramente ofensivos)
-      if (HF_KEY && patternCats.length === 0) {
+      // 2. Hugging Face — chama sempre para pegar textos sutis em qualquer idioma
+      if (HF_KEY) {
         const hfCats = await checkHuggingFace(text, HF_KEY)
         allCats.push(...hfCats)
         console.log('[moderate] HF cats:', hfCats)
