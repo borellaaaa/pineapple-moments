@@ -60,18 +60,20 @@ export default function Admin() {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [statsRes, usersRes, staffRes, violationsRes, reportsRes] = await Promise.all([
+      const [statsRes, usersRes, staffRes, violationsRes] = await Promise.all([
         supabase.rpc('admin_get_stats'),
         supabase.rpc('admin_get_users', { search_term: search || null, page_num: page, page_size: 50 }),
         supabase.from('admin_staff').select('*, profiles(display_name, username, avatar_emoji)'),
         supabase.from('moderation_violations').select('*, profiles(username,display_name)').order('created_at', { ascending: false }).limit(100),
-        supabase.rpc('admin_get_reports', { p_status: 'all' }),
       ])
       setStats(statsRes.data)
       setUsers(usersRes.data || [])
       setStaff(staffRes.data || [])
       setViolations(violationsRes.data || [])
-      setReports(reportsRes.data || [])
+
+      // Reports separado para não quebrar o resto se falhar
+      const reportsData = await safeRpc('admin_get_reports', { p_status: 'all' })
+      setReports(reportsData || [])
 
       const [retData, logsData, schedData] = await Promise.all([
         safeRpc('admin_get_retention_stats'),
@@ -179,7 +181,6 @@ export default function Admin() {
   const generateAuthorityReport = async (report) => {
     toast('Gerando relatório... aguarde 🔍', 'success')
     const now = new Date()
-    const fmt = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—'
     const reportType = { album: 'Álbum digital', user: 'Perfil de usuário', letter: 'Mensagem', page: 'Página de álbum' }[report.target_type] || report.target_type
 
     let albumPhotos = [], targetEmail = '—', targetDisplayName = '—', targetUsername = '—', targetUserId = '—', albumName = '—'
@@ -361,6 +362,7 @@ ${report.description ? `<div class="row"><span class="lbl">Descrição do Denunc
     win.document.close()
   }
 
+  const fmt = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—'
   const filteredReports = reports.filter(r => reportFilter === 'all' ? true : r.status === reportFilter)
   const b = (bg, color, border) => ({ padding: '6px 12px', background: bg, color, border: border||'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' })
   const card = (color) => ({ background: 'white', borderRadius: 12, padding: '14px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: `4px solid ${color}` })
