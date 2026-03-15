@@ -5,6 +5,19 @@ export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 )
 
+
+// ─── Log Técnico (interno) ─────────────────────────────────────────────────
+async function logEvent(userId, eventType, details = {}) {
+  try {
+    await supabase.from('technical_logs').insert({
+      user_id:    userId,
+      event_type: eventType,
+      details:    details,
+      created_at: new Date().toISOString(),
+    })
+  } catch(_) {} // log nunca deve quebrar a aplicação
+}
+
 // ─── Auth ──────────────────────────────────────────────
 export const signInWithGoogle = () =>
   supabase.auth.signInWithOAuth({
@@ -12,7 +25,11 @@ export const signInWithGoogle = () =>
     options: { redirectTo: window.location.origin + '/dashboard' }
   })
 
-export const signOut = () => supabase.auth.signOut()
+export const signOut = async () => {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) await logEvent(user.id, 'logout', {})
+  return supabase.auth.signOut()
+}
 
 // ─── Profiles ─────────────────────────────────────────
 export const getProfile = (userId) =>
@@ -49,14 +66,20 @@ export const getAlbumById = (id) =>
 export const getAlbumByToken = (token) =>
   supabase.from('albums').select('*').eq('share_token', token).single()
 
-export const createAlbum = (data) =>
-  supabase.from('albums').insert(data).select().single()
+export const createAlbum = async (data) => {
+  const res = await supabase.from('albums').insert(data).select().single()
+  if (res.data) await logEvent(data.owner_id, 'create_album', { album_id: res.data.id, name: data.name })
+  return res
+}
 
 export const updateAlbum = (id, data) =>
   supabase.from('albums').update(data).eq('id', id).select().single()
 
-export const deleteAlbum = (id) =>
-  supabase.from('albums').delete().eq('id', id)
+export const deleteAlbum = async (id) => {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) await logEvent(user.id, 'delete_album', { album_id: id })
+  return supabase.from('albums').delete().eq('id', id)
+}
 
 // ─── Saved Albums ──────────────────────────────────────
 export const getSavedAlbums = (userId) =>
@@ -126,6 +149,7 @@ export const uploadPhoto = async (file, userId) => {
   })
   if (error) return { url: null, error }
   const { data } = supabase.storage.from('album-photos').getPublicUrl(path)
+  await logEvent(userId, 'upload_photo', { path })
   return { url: data.publicUrl, error: null }
 }
 
@@ -145,6 +169,7 @@ export const sendLetter = async ({ senderId, recipientUsername, message, photoUr
     return { data: null, error: new Error(`MODERATION:${modResult.label}`) }
   }
 
+  await logEvent(senderId, 'send_letter', { recipient: recipientUsername })
   return supabase.from('letters').insert({
     sender_id: senderId,
     recipient_username: recipientUsername.toLowerCase(),

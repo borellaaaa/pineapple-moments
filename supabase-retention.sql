@@ -216,3 +216,31 @@ GRANT EXECUTE ON FUNCTION cleanup_technical_logs()          TO authenticated;
 GRANT EXECUTE ON FUNCTION cleanup_old_moderation_data()     TO authenticated;
 GRANT EXECUTE ON FUNCTION admin_get_retention_stats()       TO authenticated;
 GRANT EXECUTE ON FUNCTION admin_get_deletion_schedule()     TO authenticated;
+
+-- ── Função para admin ver logs técnicos ──────────────────────────────────────
+CREATE OR REPLACE FUNCTION admin_get_technical_logs(
+  p_user_id   UUID    DEFAULT NULL,
+  p_event     TEXT    DEFAULT NULL,
+  p_limit     INT     DEFAULT 200
+)
+RETURNS TABLE (
+  id UUID, user_id UUID, username TEXT,
+  event_type TEXT, details JSONB, created_at TIMESTAMPTZ
+) AS $$
+BEGIN
+  IF NOT is_admin_or_staff() THEN RAISE EXCEPTION 'Unauthorized'; END IF;
+  RETURN QUERY
+  SELECT
+    tl.id, tl.user_id,
+    p.username,
+    tl.event_type, tl.details, tl.created_at
+  FROM technical_logs tl
+  LEFT JOIN profiles p ON p.id = tl.user_id
+  WHERE (p_user_id IS NULL OR tl.user_id = p_user_id)
+    AND (p_event    IS NULL OR tl.event_type = p_event)
+  ORDER BY tl.created_at DESC
+  LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION admin_get_technical_logs(UUID, TEXT, INT) TO authenticated;

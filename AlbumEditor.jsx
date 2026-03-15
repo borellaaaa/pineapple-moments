@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useBanCheck } from '../hooks/useBanCheck'
 import { useToast } from '../hooks/useToast'
-import { getAlbumById, updateAlbum, getPages, createPage, updatePage, deletePage, deleteAlbum } from '../lib/supabase'
+import { getAlbumById, updateAlbum, getPages, createPage, updatePage, deletePage, deleteAlbum, supabase } from '../lib/supabase'
 import AlbumCover from '../components/AlbumCover'
 import PageCanvas from '../components/PageCanvas'
 import ShareModal from '../components/ShareModal'
@@ -22,6 +22,9 @@ export default function AlbumEditor() {
   const [showShare, setShowShare] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showReport, setShowReport] = useState(false)
+  const [reportReason, setReportReason] = useState('')
+  const [reporting, setReporting] = useState(false)
 
   useEffect(() => { load() }, [albumId])
 
@@ -63,6 +66,21 @@ export default function AlbumEditor() {
     navigate('/dashboard')
   }
 
+  async function handleReport() {
+    if (!reportReason.trim()) return
+    setReporting(true)
+    const { error } = await supabase.rpc('create_report', {
+      p_target_type: 'album',
+      p_target_id:   albumId,
+      p_reason:      reportReason,
+      p_description: null
+    })
+    setReporting(false)
+    if (error) { toast('Erro ao denunciar 😢', 'error'); return }
+    setShowReport(false); setReportReason('')
+    toast('Denúncia enviada! Nossa equipe irá analisar. 🔍', 'success')
+  }
+
   async function handleSaveAlbum(data) {
     const { data: updated, error } = await updateAlbum(albumId, data)
     if (!error) { setAlbum(updated); setShowEdit(false); toast('Álbum atualizado! ✨', 'success') }
@@ -96,6 +114,11 @@ export default function AlbumEditor() {
             </button>
           )}
           <button className="btn btn-yellow btn-sm" onClick={() => setShowShare(true)}>🔗 <span className="hide-mobile">Compartilhar</span></button>
+          {!isOwner && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowReport(true)} title="Denunciar álbum" style={{ color: 'var(--red)', borderColor: 'var(--red)' }}>
+              🚩 <span className="hide-mobile">Denunciar</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -193,6 +216,34 @@ export default function AlbumEditor() {
 
       {showShare && <ShareModal album={album} onClose={() => setShowShare(false)} />}
       {showEdit && <EditAlbumModal album={album} onClose={() => setShowEdit(false)} onSave={handleSaveAlbum} />}
+
+      {showReport && (
+        <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setShowReport(false)}>
+          <div className="modal" style={{ maxWidth: 420 }}>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ fontSize: 44 }}>🚩</div>
+              <h2 style={{ fontFamily: 'var(--font-title)', color: 'var(--red)', marginTop: 8 }}>Denunciar álbum</h2>
+              <p style={{ color: 'var(--dark-muted)', fontSize: 13, fontFamily: 'var(--font-cute)' }}>
+                Nossa equipe irá analisar a denúncia em até 48 horas
+              </p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+              {['Conteúdo ofensivo ou impróprio','Discurso de ódio ou discriminação','Conteúdo sexual ou violento','Assédio ou bullying','Spam ou conteúdo falso','Outro motivo'].map(reason => (
+                <label key={reason} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 12px', borderRadius: 8, background: reportReason===reason?'var(--green-light)':'var(--cream)', border: `2px solid ${reportReason===reason?'var(--green)':'transparent'}`, transition: 'all 0.15s' }}>
+                  <input type="radio" name="reason" value={reason} checked={reportReason===reason} onChange={e => setReportReason(e.target.value)} style={{ accentColor: 'var(--green)' }} />
+                  <span style={{ fontSize: 13, fontWeight: reportReason===reason?700:400 }}>{reason}</span>
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-ghost" onClick={() => { setShowReport(false); setReportReason('') }}>Cancelar</button>
+              <button className="btn btn-danger" onClick={handleReport} disabled={!reportReason||reporting} style={{ flex: 1 }}>
+                {reporting ? 'Enviando...' : '🚩 Enviar denúncia'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
