@@ -130,6 +130,152 @@ export default function Admin() {
     toast('Funcionário adicionado! ✅', 'success'); setNewStaffUsername(''); setShowAddStaff(false); loadData()
   }
 
+  // ── Gerar relatório para autoridades ──────────────────────────────────────
+  const generateAuthorityReport = (report) => {
+    const now = new Date()
+    const formatDate = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—'
+    const reportType = {
+      album: 'Álbum digital',
+      user: 'Perfil de usuário',
+      letter: 'Mensagem (cartinha)',
+      page: 'Página de álbum',
+    }[report.target_type] || report.target_type
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Relatório de Conteúdo Ilícito — Pineapple Moments</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #111; padding: 40px; max-width: 800px; margin: 0 auto; }
+    .header { border-bottom: 3px solid #1B3A1F; padding-bottom: 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .logo { font-size: 22px; font-weight: bold; color: #1B3A1F; }
+    .doc-title { font-size: 18px; font-weight: bold; text-align: center; margin: 24px 0 8px; color: #c62828; text-transform: uppercase; letter-spacing: 1px; }
+    .doc-subtitle { text-align: center; color: #555; margin-bottom: 28px; font-size: 12px; }
+    .section { margin-bottom: 20px; }
+    .section-title { font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #555; border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-bottom: 12px; }
+    .row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .label { font-weight: bold; min-width: 200px; color: #333; font-size: 12px; }
+    .value { color: #111; font-size: 12px; flex: 1; }
+    .highlight { background: #fff3cd; padding: 12px 16px; border-left: 4px solid #f5a623; border-radius: 4px; margin: 16px 0; }
+    .legal-box { background: #fdecea; padding: 14px 16px; border-left: 4px solid #c62828; border-radius: 4px; margin: 16px 0; font-size: 12px; line-height: 1.6; }
+    .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #ddd; font-size: 11px; color: #888; }
+    .signature-area { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+    .sig-line { border-top: 1px solid #333; padding-top: 6px; font-size: 11px; color: #555; text-align: center; margin-top: 40px; }
+    .authorities { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .auth-card { border: 1px solid #ddd; padding: 12px; border-radius: 6px; }
+    .auth-name { font-weight: bold; font-size: 12px; color: #1B3A1F; }
+    .auth-contact { font-size: 11px; color: #555; margin-top: 4px; }
+    @media print { body { padding: 20px; } .no-print { display: none; } }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <div class="logo">🍍 Pineapple Moments</div>
+      <div style="font-size:11px;color:#555;margin-top:4px">pineapple-moments.vercel.app</div>
+    </div>
+    <div style="text-align:right;font-size:11px;color:#555">
+      <div>Gerado em: ${now.toLocaleString('pt-BR')}</div>
+      <div>Protocolo: RPT-${report.id?.slice(0,8).toUpperCase()}</div>
+    </div>
+  </div>
+
+  <div class="doc-title">⚠️ Relatório de Conteúdo Ilícito</div>
+  <div class="doc-subtitle">Documento gerado para encaminhamento às autoridades competentes</div>
+
+  <div class="legal-box">
+    <strong>AVISO LEGAL:</strong> Este documento é gerado em cumprimento ao Art. 241-A do ECA (Lei 8.069/1990),
+    ao Marco Civil da Internet (Lei 12.965/2014) e à Lei 13.431/2017. O operador da plataforma está
+    comunicando o conteúdo às autoridades competentes conforme obrigação legal.
+  </div>
+
+  <div class="section">
+    <div class="section-title">1. Identificação da Denúncia</div>
+    <div class="row"><span class="label">Protocolo da Denúncia:</span><span class="value">${report.id}</span></div>
+    <div class="row"><span class="label">Data da Denúncia:</span><span class="value">${formatDate(report.created_at)}</span></div>
+    <div class="row"><span class="label">Tipo de Conteúdo:</span><span class="value">${reportType}</span></div>
+    <div class="row"><span class="label">ID do Conteúdo:</span><span class="value">${report.target_id}</span></div>
+    <div class="row"><span class="label">Motivo Reportado:</span><span class="value"><strong>${report.reason}</strong></span></div>
+    ${report.description ? `<div class="row"><span class="label">Descrição:</span><span class="value">${report.description}</span></div>` : ''}
+  </div>
+
+  <div class="section">
+    <div class="section-title">2. Usuário Denunciante</div>
+    <div class="row"><span class="label">ID do Denunciante:</span><span class="value">${report.reporter_id || 'Anônimo'}</span></div>
+    <div class="row"><span class="label">Username:</span><span class="value">@${report.reporter_username || '—'}</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">3. Informações da Plataforma</div>
+    <div class="row"><span class="label">Nome da Plataforma:</span><span class="value">Pineapple Moments</span></div>
+    <div class="row"><span class="label">URL:</span><span class="value">https://pineapple-moments.vercel.app</span></div>
+    <div class="row"><span class="label">CNPJ/CPF Responsável:</span><span class="value">A preencher pelo responsável legal</span></div>
+    <div class="row"><span class="label">E-mail do Responsável:</span><span class="value">rafaelborella49@gmail.com</span></div>
+    <div class="row"><span class="label">Data deste Relatório:</span><span class="value">${now.toLocaleString('pt-BR')}</span></div>
+    <div class="row"><span class="label">Ação Tomada:</span><span class="value">Conteúdo removido da plataforma imediatamente</span></div>
+  </div>
+
+  <div class="highlight">
+    <strong>Observação do Operador:</strong> Assim que identificado o conteúdo, foram tomadas as seguintes medidas:
+    remoção imediata do conteúdo, suspensão da conta do usuário responsável e geração deste relatório
+    para encaminhamento às autoridades competentes conforme exigido por lei.
+  </div>
+
+  <div class="section">
+    <div class="section-title">4. Autoridades para Encaminhamento</div>
+    <div class="authorities">
+      <div class="auth-card">
+        <div class="auth-name">🏛️ Polícia Federal</div>
+        <div class="auth-contact">delegacia.dpf.gov.br<br>Para crimes federais, CSAM, tráfico</div>
+      </div>
+      <div class="auth-card">
+        <div class="auth-name">🛡️ SaferNet Brasil</div>
+        <div class="auth-contact">safernet.org.br/denuncie<br>Especializada em crimes online, CSAM</div>
+      </div>
+      <div class="auth-card">
+        <div class="auth-name">📞 Disque 100</div>
+        <div class="auth-contact">Direitos Humanos<br>Para casos envolvendo menores</div>
+      </div>
+      <div class="auth-card">
+        <div class="auth-name">🏢 Polícia Civil</div>
+        <div class="auth-contact">Delegacia local<br>Para ameaças e crimes comuns</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="signature-area">
+    <div>
+      <div class="sig-line">Assinatura do Responsável Legal</div>
+      <div style="font-size:11px;color:#555;text-align:center;margin-top:4px">Nome / CPF</div>
+    </div>
+    <div>
+      <div class="sig-line">Data e Local</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Este documento foi gerado automaticamente pelo sistema de moderação do Pineapple Moments em
+    ${now.toLocaleString('pt-BR')}. Protocolo: RPT-${report.id?.slice(0,8).toUpperCase()}.
+    Em caso de dúvidas: rafaelborella49@gmail.com
+  </div>
+
+  <div class="no-print" style="margin-top:24px;text-align:center">
+    <button onclick="window.print()" style="padding:12px 28px;background:#1B3A1F;color:white;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer">
+      🖨️ Imprimir / Salvar como PDF
+    </button>
+  </div>
+
+</body>
+</html>`
+
+    const win = window.open('', '_blank')
+    win.document.write(html)
+    win.document.close()
+  }
+
   const filteredReports = reports.filter(r => reportFilter === 'all' ? true : r.status === reportFilter)
 
   const cardStyle = (color) => ({
@@ -323,6 +469,12 @@ export default function Admin() {
                       )}
                     </div>
 
+                    {r.status !== 'pending' && (
+                      <button onClick={() => generateAuthorityReport(r)}
+                        style={{ ...btnStyle('#1B3A1F','white'), alignSelf:'flex-start', marginTop:8 }}>
+                        🏛️ Gerar Relatório
+                      </button>
+                    )}
                     {r.status === 'pending' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 160 }}>
                         {r.target_type === 'album' && (
@@ -337,6 +489,8 @@ export default function Admin() {
                           style={btnStyle('#e8f5e9', '#2e7d32')}>✅ Resolver sem ação</button>
                         <button onClick={() => handleDismissReport(r.id)}
                           style={btnStyle('#f5f5f5', '#888')}>📁 Arquivar</button>
+                        <button onClick={() => generateAuthorityReport(r)}
+                          style={btnStyle('#1B3A1F', 'white')}>🏛️ Relatório</button>
                       </div>
                     )}
                   </div>
