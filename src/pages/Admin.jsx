@@ -29,15 +29,18 @@ export default function Admin() {
   const [showAddStaff, setShowAddStaff] = useState(false)
   const [newStaffEmail, setNewStaffEmail] = useState('')
 
-  // Verificar se é admin
+  // Verificar se é admin via RPC (evita problemas de RLS)
   useEffect(() => {
     if (!user) return
-    supabase.from('admin_staff').select('role').eq('user_id', user.id).single()
-      .then(({ data }) => {
-        if (!data) { navigate('/dashboard'); return }
-        setIsAdmin(data.role === 'admin')
-        loadData()
-      })
+    supabase.rpc('is_admin_or_staff').then(({ data, error }) => {
+      if (error || !data) { navigate('/dashboard'); return }
+      // Busca role separado
+      supabase.from('admin_staff').select('role').eq('user_id', user.id).maybeSingle()
+        .then(({ data: staffData }) => {
+          setIsAdmin(staffData?.role === 'admin')
+          loadData()
+        })
+    })
   }, [user])
 
   const loadData = useCallback(async () => {
