@@ -315,6 +315,12 @@ export default function Admin() {
                       <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>Motivo: {r.reason}</div>
                       {r.description && <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>{r.description}</div>}
                       <div style={{ fontSize: 11, color: '#aaa', fontFamily: 'monospace' }}>ID: {r.target_id}</div>
+                      {r.target_type === 'album' && (
+                        <a href={`/album/${r.target_id}`} target="_blank" rel="noopener noreferrer"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 12, color: '#1565c0', fontWeight: 700, textDecoration: 'none', background: '#e3f2fd', padding: '4px 10px', borderRadius: 8 }}>
+                          👁️ Ver álbum →
+                        </a>
+                      )}
                     </div>
 
                     {r.status === 'pending' && (
