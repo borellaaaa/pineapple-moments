@@ -68,20 +68,19 @@ function detectByPattern(text: string): string[] {
 }
 
 // ─── Hugging Face — multilíngue, qualquer idioma ─────────────────────────────
-// Modelos ativos (verificados março 2025):
-//   1. cardiffnlp/twitter-roberta-base-hate-latest → hate speech multilíngue
-//   2. facebook/roberta-hate-speech-dynabench-r4-target → EN hate/toxicidade
-//   3. martin-ha/toxic-comment-model → EN toxicidade geral
+// URL nova da API: router.huggingface.co/hf-inference/models/
+// Modelos com Inference Available confirmados
 async function checkHuggingFace(text: string, hfKey: string): Promise<string[]> {
   const models = [
-    'cardiffnlp/twitter-roberta-base-hate-latest',
-    'martin-ha/toxic-comment-model',
-    'facebook/roberta-hate-speech-dynabench-r4-target',
+    'martin-ha/toxic-comment-model',           // DistilBERT toxicidade — ativo
+    'michellejieli/offensive_speech_classifier', // offensive speech — ativo
+    'cardiffnlp/twitter-roberta-base-offensive', // ofensivo em tweets — ativo
   ]
 
   for (const model of models) {
     try {
-      const res = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+      // Nova URL da Inference API do Hugging Face (2025+)
+      const res = await fetch(`https://router.huggingface.co/hf-inference/models/${model}`, {
         method:  'POST',
         headers: {
           'Authorization': `Bearer ${hfKey}`,
