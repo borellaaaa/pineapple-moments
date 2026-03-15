@@ -59,6 +59,21 @@ const PATTERNS: Record<string, RegExp[]> = {
   ],
 }
 
+// ─── Termos seguros — nunca bloquear mesmo que o modelo queira ──────────────
+// Expressões carinhosas, fofas e de afeto em PT-BR que o modelo confunde com assédio
+const SAFE_PATTERNS = [
+  /(te amo|te adoro|você é lindo|você é linda|você é incrível|você é especial)/i,
+  /(saudade|te quero|meu amor|minha flor|querido|querida|fofo|fofa|fofinho|fofinha)/i,
+  /(te mando um abraço|beijo|beijinho|saudades|amo muito|amo demais)/i,
+  /(parabéns|feliz aniversário|feliz natal|boa sorte|torcendo por você)/i,
+  /(você me faz feliz|você é minha alegria|obrigado por existir)/i,
+  /(amizade|amigo|amiga|parceiro|parceira|companheiro)/i,
+]
+
+function isSafeText(text: string): boolean {
+  return SAFE_PATTERNS.some(p => p.test(text))
+}
+
 function detectByPattern(text: string): string[] {
   const found = new Set<string>()
   for (const [cat, patterns] of Object.entries(PATTERNS)) {
@@ -113,7 +128,7 @@ async function checkHuggingFace(text: string, hfKey: string): Promise<string[]> 
       if (results.length === 0) continue
 
       const cats: string[] = []
-      const THRESHOLD = 0.60
+      const THRESHOLD = 0.82  // Alto para evitar falsos positivos em português fofo
 
       for (const item of results) {
         const label = (item.label || '').toLowerCase()
@@ -227,11 +242,14 @@ serve(async (req) => {
       allCats.push(...patternCats)
       console.log('[moderate] padrões:', patternCats, '|', text.slice(0, 60))
 
-      // 2. Hugging Face — chama sempre para pegar textos sutis em qualquer idioma
-      if (HF_KEY) {
+      // 2. Hugging Face — só chama se não for texto claramente fofo/afetivo
+      // Isso evita falsos positivos com expressões carinhosas em PT-BR
+      if (HF_KEY && !isSafeText(text)) {
         const hfCats = await checkHuggingFace(text, HF_KEY)
         allCats.push(...hfCats)
         console.log('[moderate] HF cats:', hfCats)
+      } else if (isSafeText(text)) {
+        console.log('[moderate] Texto fofo detectado — HF pulado')
       }
     }
 

@@ -23,7 +23,8 @@ export default function Profile() {
   const usernameTimer = useRef(null)
 
   useEffect(() => {
-    getProfile(user.id).then(({ data }) => {
+    async function load() {
+      const { data } = await getProfile(user.id)
       setProfile(data)
       if (data) setForm({
         display_name: data.display_name || '',
@@ -36,7 +37,8 @@ export default function Profile() {
       const { data: staffData } = await supabase.from('admin_staff').select('role').eq('user_id', user.id).maybeSingle()
       setIsStaff(!!staffData)
       setLoading(false)
-    })
+    }
+    load()
   }, [user])
 
   const handleUsernameChange = (val) => {
