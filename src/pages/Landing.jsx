@@ -151,7 +151,12 @@ export default function Landing() {
 
       {/* Footer */}
       <footer style={{ textAlign: 'center', padding: 'clamp(14px,2vw,22px)', background: 'white', borderTop: '2px solid rgba(58,140,63,0.08)', fontSize: 12, color: '#aaa', fontFamily: 'Quicksand' }}>
-        Feito com 💛 por quem ama memórias • Pineapple Moments
+        <p style={{ marginBottom: 8 }}>Feito com 💛 por quem ama memórias • Pineapple Moments</p>
+        <div style={{ display: 'flex', gap: 20, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Link to="/privacy" style={{ color: '#888', textDecoration: 'none', fontWeight: 700 }}>Política de Privacidade</Link>
+          <span style={{ color: '#ddd' }}>•</span>
+          <Link to="/terms" style={{ color: '#888', textDecoration: 'none', fontWeight: 700 }}>Termos de Serviço</Link>
+        </div>
       </footer>
 
       <style>{`

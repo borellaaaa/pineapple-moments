@@ -8,6 +8,8 @@ import AlbumEditor from './pages/AlbumEditor'
 import SharedAlbum from './pages/SharedAlbum'
 import Profile from './pages/Profile'
 import Letters from './pages/Letters'
+import Privacy from './pages/Privacy'
+import Terms from './pages/Terms'
 
 function Protected({ children }) {
   const { user, loading } = useAuth()
@@ -34,6 +36,8 @@ export default function App() {
             <Route path="/shared/:token" element={<SharedAlbum />} />
             <Route path="/profile" element={<Protected><Profile /></Protected>} />
             <Route path="/letters" element={<Protected><Letters /></Protected>} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
