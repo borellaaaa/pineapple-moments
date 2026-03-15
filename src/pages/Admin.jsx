@@ -47,24 +47,33 @@ export default function Admin() {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [statsRes, usersRes, staffRes, violationsRes, reportsRes, retentionRes, logsRes, scheduleRes] = await Promise.all([
+      // Carrega dados principais em paralelo
+      const [statsRes, usersRes, staffRes, violationsRes, reportsRes] = await Promise.all([
         supabase.rpc('admin_get_stats'),
         supabase.rpc('admin_get_users', { search_term: search || null, page_num: page, page_size: 50 }),
         supabase.from('admin_staff').select('*, profiles(display_name, username, avatar_emoji)'),
         supabase.from('moderation_violations').select('*, profiles(username, display_name)').order('created_at', { ascending: false }).limit(100),
         supabase.rpc('admin_get_reports', { p_status: 'all' }),
-        supabase.rpc('admin_get_retention_stats').catch(() => ({ data: null })),
-        supabase.rpc('admin_get_technical_logs', { p_user_id: null, p_event: null, p_limit: 200 }).catch(() => ({ data: [] })),
-        supabase.rpc('admin_get_deletion_schedule').catch(() => ({ data: [] })),
       ])
       setStats(statsRes.data)
       setUsers(usersRes.data || [])
       setStaff(staffRes.data || [])
       setViolations(violationsRes.data || [])
       setReports(reportsRes.data || [])
-      setRetention(retentionRes.data)
-      setLogs(logsRes.data || [])
-      setDeletionSchedule(scheduleRes.data || [])
+
+      // Carrega dados secundários — ignora erro se função não existir ainda
+      const safeRpc = async (fn, args) => {
+        const { data } = await supabase.rpc(fn, args)
+        return data
+      }
+      const [retData, logsData, schedData] = await Promise.all([
+        safeRpc('admin_get_retention_stats', {}),
+        safeRpc('admin_get_technical_logs', { p_user_id: null, p_event: null, p_limit: 200 }),
+        safeRpc('admin_get_deletion_schedule', {}),
+      ])
+      setRetention(retData)
+      setLogs(logsData || [])
+      setDeletionSchedule(schedData || [])
     } catch(e) { console.error(e) }
     setLoading(false)
   }, [search, page])
