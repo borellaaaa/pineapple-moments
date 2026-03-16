@@ -455,7 +455,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
               {uploading ? <span className="loader loader-sm" style={{margin:0}}/> : '📷'}
             </button>
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{display:'none'}} onChange={handleUpload}/>
-            <button style={toolBtn(panel==='postit')} onClick={() => setPanel(p => p==='postit'?'none':'postit')} title="Post-it">📝</button>
+
           </div>
 
           <div style={{width:1,height:28,background:'var(--dark-faint)',flexShrink:0}}/>
@@ -574,22 +574,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
       )}
 
       {/* ── Post-it Panel ── */}
-      {panel === 'postit' && isOwner && (
-        <div style={{ background:'white', borderRadius:16, padding:'12px 16px', boxShadow:'var(--shadow)', width:'100%', maxWidth:595, animation:'slideDown 0.2s ease' }}>
-          <p style={{ fontSize:11, fontWeight:700, color:'var(--dark-muted)', marginBottom:10, textAlign:'center' }}>📝 Escolha a cor do post-it</p>
-          <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'center' }}>
-            {POSTIT_COLORS.map(c => (
-              <button key={c.id} onClick={() => addPostit(c.id)} title={c.label}
-                style={{ width:52, height:52, background:c.bg, border:`2px solid ${c.line}`, borderRadius:6, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, boxShadow:`2px 3px 6px ${c.line}40`, transition:'transform 0.15s', transform:'rotate(-3deg)', position:'relative' }}
-                onMouseOver={e => e.currentTarget.style.transform='scale(1.12) rotate(-1deg)'}
-                onMouseOut={e => e.currentTarget.style.transform='rotate(-3deg)'}>
-                <span style={{ fontSize:8, fontWeight:700, color:c.text, fontFamily:'Quicksand' }}>{c.label}</span>
-                <span style={{ position:'absolute', top:0, left:0, right:0, height:4, background:c.line, borderRadius:'4px 4px 0 0', opacity:0.5 }}/>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+
 
       {/* ── Sticker Panel ── */}
       {panel === 'stickers' && isOwner && (
