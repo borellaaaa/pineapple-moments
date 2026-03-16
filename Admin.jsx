@@ -216,26 +216,15 @@ export default function Admin() {
             else if (ul?.[0]) targetEmail = ul[0].email || '—'
           }
 
-          // Busca páginas e fotos
-          const { data: pages, error: pagesErr } = await supabase
-            .from('pages').select('svg_paths').eq('album_id', report.target_id)
-          console.log('[relatório] pages:', pages?.length, pagesErr)
-
-          if (pages && pages.length > 0) {
+          // Busca IDs das páginas para gerar links de screenshot
+          const { data: pages } = await supabase
+            .from('pages').select('id').eq('album_id', report.target_id).order('created_at', { ascending: true })
+          console.log('[relatório] páginas encontradas:', pages?.length)
+          if (pages) {
             for (const pg of pages) {
-              try {
-                const raw = pg.svg_paths
-                const els = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : [])
-                console.log('[relatório] elementos na página:', els.length, els.map(e=>e.type))
-                for (const el of els) {
-                  if (el.type === 'image' && el.src) {
-                    albumPhotos.push(el.src)
-                  }
-                }
-              } catch(parseErr) { console.warn('[relatório] parse erro:', parseErr) }
+              albumPhotos.push({ type: 'page', pageId: pg.id, albumId: report.target_id })
             }
           }
-          console.log('[relatório] fotos encontradas:', albumPhotos.length)
         }
       }
 
@@ -251,14 +240,92 @@ export default function Admin() {
       }
     } catch(e) { console.warn('Erro relatório:', e) }
 
-    // Monta HTML das fotos — usa img direto com src
-    const photosSection = albumPhotos.length > 0
-      ? albumPhotos.map((src, i) =>
-          `<div style="display:inline-block;margin:6px;border:2px solid #ccc;border-radius:6px;overflow:hidden;vertical-align:top;background:#f5f5f5">
-            <img src="${src.replace(/"/g, '&quot;')}" style="width:200px;height:150px;object-fit:cover;display:block" />
-            <div style="font-size:10px;color:#666;padding:4px 8px;text-align:center">Imagem ${i+1} de ${albumPhotos.length}</div>
-          </div>`).join('\n')
-      : '<p style="color:#888;font-style:italic;padding:16px">Nenhuma foto encontrada — pode ter sido removida antes da geração do relatório.</p>'
+    // Captura screenshots das páginas usando html2canvas
+    const origin = window.location.origin
+    let pageScreenshots = []
+
+    if (albumPhotos.length > 0) {
+      toast('Capturando páginas do álbum... aguarde ⏳', 'success')
+      // Carrega html2canvas dinamicamente
+      await new Promise((resolve) => {
+        const script = document.createElement('script')
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'
+        script.onload = resolve
+        script.onerror = resolve
+        document.head.appendChild(script)
+      })
+
+      for (let i = 0; i < albumPhotos.length; i++) {
+        const item = albumPhotos[i]
+        try {
+          // Busca dados da página para renderizar
+          const { data: pgData } = await supabase
+            .from('pages').select('svg_paths, bg_color').eq('id', item.pageId).single()
+
+          if (pgData) {
+            // Cria canvas temporário para renderizar a página
+            const CANVAS_W = 595, CANVAS_H = 842
+            const container = document.createElement('div')
+            container.style.cssText = `position:fixed;left:-9999px;top:0;width:${CANVAS_W}px;height:${CANVAS_H}px;background:${pgData.bg_color||'#fff'};overflow:hidden;z-index:-1`
+
+            // Renderiza elementos da página
+            const els = typeof pgData.svg_paths === 'string' ? JSON.parse(pgData.svg_paths||'[]') : (pgData.svg_paths||[])
+            for (const el of els) {
+              if (el.type === 'image' && el.src) {
+                const img = document.createElement('img')
+                img.src = el.src
+                img.crossOrigin = 'anonymous'
+                img.style.cssText = `position:absolute;left:${el.x||0}px;top:${el.y||0}px;width:${el.w||100}px;height:${el.h||100}px;object-fit:cover`
+                container.appendChild(img)
+              }
+              if (el.type === 'text' && el.text) {
+                const div = document.createElement('div')
+                div.textContent = el.text
+                div.style.cssText = `position:absolute;left:${el.x||0}px;top:${el.y||0}px;font-size:${el.fontSize||14}px;color:${el.color||'#000'};white-space:pre-wrap;max-width:${CANVAS_W}px`
+                container.appendChild(div)
+              }
+              if (el.type === 'sticker' && el.emoji) {
+                const span = document.createElement('span')
+                span.textContent = el.emoji
+                span.style.cssText = `position:absolute;left:${el.x||0}px;top:${el.y||0}px;font-size:${el.fontSize||32}px`
+                container.appendChild(span)
+              }
+            }
+
+            document.body.appendChild(container)
+            // Aguarda imagens carregarem
+            await new Promise(r => setTimeout(r, 800))
+
+            if (window.html2canvas) {
+              try {
+                const canvas = await window.html2canvas(container, { useCORS: true, allowTaint: true, scale: 0.5, logging: false })
+                pageScreenshots.push({ dataUrl: canvas.toDataURL('image/jpeg', 0.8), index: i + 1, pageId: item.pageId })
+              } catch(e) { console.warn('html2canvas erro:', e) }
+            }
+            document.body.removeChild(container)
+          }
+        } catch(e) { console.warn('Erro captura página:', e) }
+      }
+    }
+
+    const photosSection = pageScreenshots.length > 0
+      ? pageScreenshots.map(s =>
+          `<div style="margin:10px 0;border:2px solid #ddd;border-radius:8px;overflow:hidden">
+            <div style="background:#1B3A1F;color:white;padding:5px 12px;font-size:11px;font-weight:bold">
+              📄 Página ${s.index} de ${pageScreenshots.length}
+            </div>
+            <img src="${s.dataUrl}" style="width:100%;display:block" />
+          </div>`
+        ).join('\n')
+      : albumPhotos.length > 0
+        ? albumPhotos.map((item, i) =>
+            `<div style="margin:10px 0;padding:14px;background:#f5f5f5;border:1px solid #ddd;border-radius:8px">
+              <p style="font-size:12px;font-weight:bold;margin-bottom:6px">📄 Página ${i+1} — screenshot não disponível</p>
+              <p style="font-size:11px;color:#555">Page ID: ${item.pageId}</p>
+              <a href="${origin}/album/${item.albumId}" target="_blank" style="font-size:12px;color:#1565c0;font-weight:bold">👁️ Ver álbum →</a>
+            </div>`
+          ).join('\n')
+        : '<p style="color:#888;font-style:italic;padding:16px">Nenhuma página encontrada neste álbum.</p>'
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
