@@ -224,7 +224,7 @@ export default function Admin() {
 
           // Busca páginas e fotos — elementos salvos como type:'photo' com campo url
           const { data: pages } = await supabase
-            .from('pages').select('id, svg_paths, elements, bg_color')
+            .from('pages').select('id, elements, svg_paths, bg_color, page_style')
             .eq('album_id', report.target_id)
             .order('created_at', { ascending: true })
           console.log('[relatório] páginas encontradas:', pages?.length)
@@ -234,16 +234,15 @@ export default function Admin() {
               albumPhotos.push({ type: 'page', pageId: pg.id, albumId: report.target_id })
               // Extrai URLs das fotos dos elementos
               try {
-                // Tenta campo 'elements' primeiro, depois 'svg_paths'
-                const raw = pg.elements || pg.svg_paths
-                const els = typeof raw === 'string' ? JSON.parse(raw||'[]') : (Array.isArray(raw) ? raw : [])
+                // elements = fotos/textos/stickers, svg_paths = desenhos canvas
+                const rawEls = pg.elements
+                const els = Array.isArray(rawEls) ? rawEls
+                  : (typeof rawEls === 'string' ? JSON.parse(rawEls||'[]') : [])
+                console.log('[relatório] página', pg.id, '- elementos:', els.length)
                 for (const el of els) {
-                  // Fotos salvas como type:'photo' com campo 'url'
                   if ((el.type === 'photo' || el.type === 'image') && (el.url || el.src)) {
                     const photoUrl = el.url || el.src
-                    if (photoUrl.startsWith('http') || photoUrl.startsWith('data:')) {
-                      albumPhotos.push({ type: 'photo', src: photoUrl, pageId: pg.id })
-                    }
+                    albumPhotos.push({ type: 'photo', src: photoUrl, pageId: pg.id })
                   }
                 }
               } catch(e) { console.warn('[relatório] parse erro:', e) }
@@ -319,7 +318,7 @@ export default function Admin() {
       const item = pageItems[i]
       try {
         const { data: pgData } = await supabase
-          .from('pages').select('elements, svg_paths, bg_color, page_style')
+          .from('pages').select('id, elements, svg_paths, bg_color, page_style')
           .eq('id', item.pageId).single()
         if (!pgData) continue
 
@@ -337,10 +336,12 @@ export default function Admin() {
         document.body.appendChild(container)
 
         // Pega elementos da página
-        const raw = pgData.elements || pgData.svg_paths
-        const els = typeof raw === 'string'
-          ? JSON.parse(raw || '[]')
-          : (Array.isArray(raw) ? raw : [])
+        // elementos salvos em 'elements' (fotos, textos, stickers)
+        // svg_paths contém apenas dados de desenho canvas
+        const rawEls = pgData.elements
+        const els = Array.isArray(rawEls) ? rawEls
+          : (typeof rawEls === 'string' ? JSON.parse(rawEls || '[]') : [])
+        console.log('[screenshot] página', i+1, '- elementos:', els.length, els.map(e=>e.type))
 
         // Converte todas as fotos para base64 antes de renderizar
         for (const el of els) {
