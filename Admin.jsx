@@ -270,184 +270,177 @@ export default function Admin() {
     const photoItems = albumPhotos.filter(i => i.type === 'photo')
     const origin = window.location.origin
 
-    // Converte fotos para base64 para incluir direto no PDF (resolve CORS)
-    toast('Carregando imagens... ⏳', 'success')
-    const photosBase64 = []
-    for (const item of photoItems) {
+    // ── Converte URL para base64 (resolve CORS) ───────────────────────────────
+    const urlToBase64 = async (url) => {
       try {
-        const res = await fetch(item.src, { mode: 'cors' })
-        if (res.ok) {
-          const blob = await res.blob()
-          const b64 = await new Promise((resolve) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(reader.result)
-            reader.onerror = () => resolve(null)
-            reader.readAsDataURL(blob)
-          })
-          photosBase64.push({ b64, pageId: item.pageId, src: item.src })
-        } else {
-          photosBase64.push({ b64: null, pageId: item.pageId, src: item.src })
+        const res = await fetch(url, { mode: 'cors' })
+        if (!res.ok) return null
+        const blob = await res.blob()
+        return await new Promise(r => {
+          const reader = new FileReader()
+          reader.onload = () => r(reader.result)
+          reader.onerror = () => r(null)
+          reader.readAsDataURL(blob)
+        })
+      } catch { return null }
+    }
+
+    // ── Carrega html2canvas ───────────────────────────────────────────────────
+    toast('Gerando prints das páginas... aguarde ⏳', 'success')
+    await new Promise((resolve) => {
+      if (window.html2canvas) { resolve(); return }
+      const s = document.createElement('script')
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'
+      s.onload = resolve; s.onerror = resolve
+      document.head.appendChild(s)
+    })
+
+    // ── Renderiza cada página e tira screenshot ───────────────────────────────
+    const pageScreenshots = []
+    const PAGE_STYLES_MAP = {
+      white:'#FFFFFF', cream:'#FFF8E7', mint:'#E8F5E9', sky:'#E3F2FD',
+      blush:'#FCE4EC', lavender:'#F3E5F5', peach:'#FFF3E0', lilac:'#EDE7F6',
+      sage:'#F1F8E9', charcoal:'#263238',
+      grad_sunset:'linear-gradient(135deg,#FFD89B,#FF6B9D)',
+      grad_ocean:'linear-gradient(135deg,#4facfe,#00f2fe)',
+      grad_forest:'linear-gradient(135deg,#C8E6C9,#43E97B)',
+      grad_candy:'linear-gradient(135deg,#F093FB,#F5576C)',
+      grad_gold:'linear-gradient(135deg,#f6d365,#fda085)',
+      grad_aurora:'linear-gradient(135deg,#a18cd1,#fbc2eb)',
+    }
+
+    for (let i = 0; i < pageItems.length; i++) {
+      const item = pageItems[i]
+      try {
+        const { data: pgData } = await supabase
+          .from('pages').select('elements, svg_paths, bg_color, page_style')
+          .eq('id', item.pageId).single()
+        if (!pgData) continue
+
+        const CANVAS_W = 595, CANVAS_H = 842
+        const container = document.createElement('div')
+        const bgStyle = PAGE_STYLES_MAP[pgData.page_style] || pgData.bg_color || '#FFFFFF'
+        container.style.cssText = [
+          'position:fixed', 'left:-9999px', 'top:0',
+          `width:${CANVAS_W}px`, `height:${CANVAS_H}px`,
+          'overflow:hidden', 'z-index:9999',
+          bgStyle.includes('gradient')
+            ? `background:${bgStyle}`
+            : `background-color:${bgStyle}`,
+        ].join(';')
+        document.body.appendChild(container)
+
+        // Pega elementos da página
+        const raw = pgData.elements || pgData.svg_paths
+        const els = typeof raw === 'string'
+          ? JSON.parse(raw || '[]')
+          : (Array.isArray(raw) ? raw : [])
+
+        // Converte todas as fotos para base64 antes de renderizar
+        for (const el of els) {
+          if ((el.type === 'photo' || el.type === 'image') && (el.url || el.src)) {
+            const origUrl = el.url || el.src
+            const b64 = await urlToBase64(origUrl)
+            if (b64) { el._b64 = b64 }
+          }
         }
+
+        // Renderiza elementos
+        for (const el of els) {
+          if (el.type === 'photo' || el.type === 'image') {
+            const imgSrc = el._b64 || el.url || el.src
+            if (!imgSrc) continue
+            const img = document.createElement('img')
+            img.src = imgSrc
+            img.style.cssText = [
+              'position:absolute',
+              `left:${el.x||0}px`, `top:${el.y||0}px`,
+              `width:${el.width||el.w||100}px`, `height:${el.height||el.h||100}px`,
+              'object-fit:cover', `border-radius:${el.radius||0}px`,
+              el.rotation ? `transform:rotate(${el.rotation}deg)` : '',
+            ].join(';')
+            container.appendChild(img)
+          }
+
+          if (el.type === 'text' && el.text) {
+            const div = document.createElement('div')
+            div.textContent = el.text
+            div.style.cssText = [
+              'position:absolute',
+              `left:${el.x||0}px`, `top:${el.y||0}px`,
+              `font-size:${el.fontSize||14}px`,
+              `color:${el.color||'#000'}`,
+              `font-family:${el.fontFamily||'Arial'},sans-serif`,
+              'white-space:pre-wrap', `max-width:${CANVAS_W}px`,
+              el.rotation ? `transform:rotate(${el.rotation}deg)` : '',
+            ].join(';')
+            container.appendChild(div)
+          }
+
+          if (el.type === 'sticker' && el.emoji) {
+            const span = document.createElement('span')
+            span.textContent = el.emoji
+            span.style.cssText = [
+              'position:absolute',
+              `left:${el.x||0}px`, `top:${el.y||0}px`,
+              `font-size:${el.fontSize||el.size||32}px`,
+              'line-height:1', 'user-select:none',
+              el.rotation ? `transform:rotate(${el.rotation}deg)` : '',
+            ].join(';')
+            container.appendChild(span)
+          }
+
+          // Desenhos (canvas SVG paths)
+          if (el.type === 'drawing' || el.type === 'svg') {
+            const img = document.createElement('img')
+            img.src = el.dataUrl || el.src || ''
+            img.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none'
+            container.appendChild(img)
+          }
+        }
+
+        // Aguarda imagens carregarem
+        await new Promise(r => setTimeout(r, 1200))
+
+        if (window.html2canvas) {
+          const canvas = await window.html2canvas(container, {
+            useCORS: true,
+            allowTaint: false,
+            scale: 0.7,
+            logging: false,
+            backgroundColor: bgStyle.includes('gradient') ? null : bgStyle,
+          })
+          pageScreenshots.push({
+            dataUrl: canvas.toDataURL('image/jpeg', 0.85),
+            index: i + 1,
+            pageId: item.pageId,
+          })
+        }
+        document.body.removeChild(container)
       } catch(e) {
-        console.warn('Erro ao converter foto:', e)
-        photosBase64.push({ b64: null, pageId: item.pageId, src: item.src })
+        console.warn('Erro captura página', i+1, e)
+        try { document.body.removeChild(container) } catch(_) {}
       }
     }
-    // Monta seção de evidências com fotos em base64 (sem problemas de CORS)
-    const fotosConvertidas = photosBase64.filter(p => p.b64)
-    const fotosFallback    = photosBase64.filter(p => !p.b64)
 
-    const directPhotosHtml = fotosConvertidas.map((item, i) =>
-      `<div style="display:inline-block;margin:8px;border:3px solid #c62828;border-radius:8px;overflow:hidden;vertical-align:top;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
-        <img src="${" + item.b64 + "}" style="width:220px;height:165px;object-fit:cover;display:block" />
-        <div style="font-size:11px;color:#c62828;padding:4px 8px;background:#fff3cd;text-align:center;font-weight:bold">📷 Foto evidência ${i+1}</div>
-      </div>`
-    ).join('\n')
-
-    const fallbackHtml = fotosFallback.length > 0 || photoItems.length === 0
-      ? pageItems.map((item, i) =>
-          `<div style="margin:8px 0;padding:12px;background:#f5f5f5;border:1px solid #ddd;border-radius:8px">
-            <p style="font-size:12px;font-weight:bold">📄 Página ${i+1} — Link direto:</p>
-            <a href="${origin}/album/${item.albumId}" target="_blank" style="font-size:12px;color:#1565c0;font-weight:bold">👁️ Ver álbum →</a>
-          </div>`
+    // ── Monta HTML das páginas ────────────────────────────────────────────────
+    const photosSection = pageScreenshots.length > 0
+      ? pageScreenshots.map(s =>
+          '<div style="margin:12px 0;border:3px solid #1B3A1F;border-radius:8px;overflow:hidden;page-break-inside:avoid">' +
+            '<div style="background:#1B3A1F;color:white;padding:6px 14px;font-size:12px;font-weight:bold">' +
+              '📄 Página ' + s.index + ' de ' + pageScreenshots.length + ' — ID: ' + s.pageId +
+            '</div>' +
+            '<img src="' + s.dataUrl + '" style="width:100%;display:block;max-height:600px;object-fit:contain" />' +
+          '</div>'
         ).join('\n')
-      : ''
-
-    const totalFotos = fotosConvertidas.length + fotosFallback.length
-    const photosSection = totalFotos > 0 || pageItems.length > 0
-      ? `<div>
-          ${fotosConvertidas.length > 0 ? `
-            <p style="font-size:12px;font-weight:bold;color:#c62828;margin-bottom:10px">
-              📷 ${fotosConvertidas.length} de ${totalFotos} foto(s) capturada(s) como evidência:
-            </p>
-            ${directPhotosHtml}` : ''}
-          ${fotosFallback.length > 0 ? `
-            <p style="font-size:11px;color:#888;margin:8px 0">
-              ⚠️ ${fotosFallback.length} foto(s) não puderam ser incorporadas (restrição CORS) — acesse pelo link abaixo antes de deletar.
-            </p>` : ''}
-          ${fallbackHtml}
-        </div>`
-      : '<p style="color:#888;font-style:italic;padding:16px">Nenhuma foto encontrada neste álbum.</p>'
-
-    const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<title>Relatório RPT-${(report.id||'').slice(0,8).toUpperCase()} — Pineapple Moments</title>
-<style>
-  body{font-family:Arial,sans-serif;font-size:13px;color:#111;padding:40px;max-width:850px;margin:0 auto}
-  h1{font-size:18px;color:#c62828;text-align:center;text-transform:uppercase;margin:20px 0 6px}
-  h2{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#555;border-bottom:1px solid #ddd;padding-bottom:4px;margin:20px 0 12px}
-  .header{display:flex;justify-content:space-between;border-bottom:3px solid #1B3A1F;padding-bottom:16px;margin-bottom:20px}
-  .logo{font-size:20px;font-weight:bold;color:#1B3A1F}
-  .sub{font-size:11px;color:#555;margin-top:3px}
-  .row{display:flex;gap:8px;margin-bottom:8px}
-  .lbl{font-weight:bold;min-width:220px;color:#333;font-size:12px}
-  .val{color:#111;font-size:12px;flex:1;word-break:break-all}
-  .box-red{background:#fdecea;border-left:4px solid #c62828;padding:12px 16px;border-radius:4px;margin:14px 0;font-size:12px;line-height:1.7}
-  .box-yellow{background:#fff3cd;border-left:4px solid #f5a623;padding:12px 16px;border-radius:4px;margin:14px 0;font-size:12px;line-height:1.7}
-  .photos{background:#f9f9f9;border:1px solid #ddd;border-radius:8px;padding:16px;margin:8px 0}
-  .auth-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
-  .auth-card{border:1px solid #ddd;padding:12px;border-radius:6px}
-  .auth-name{font-weight:bold;color:#1B3A1F;font-size:12px}
-  .auth-info{font-size:11px;color:#555;margin-top:4px}
-  .sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:48px}
-  .sig-line{border-top:1px solid #333;padding-top:6px;font-size:11px;color:#555;text-align:center;margin-top:44px}
-  .footer{margin-top:32px;padding-top:12px;border-top:1px solid #ddd;font-size:11px;color:#888}
-  @media print{.noprint{display:none}}
-</style>
-</head>
-<body>
-<div class="header">
-  <div>
-    <div class="logo">🍍 Pineapple Moments</div>
-    <div class="sub">pineapple-moments.vercel.app</div>
-  </div>
-  <div style="text-align:right;font-size:11px;color:#555">
-    <div>Gerado em: ${now.toLocaleString('pt-BR')}</div>
-    <div style="font-weight:bold;color:#c62828">Protocolo: RPT-${(report.id||'').slice(0,8).toUpperCase()}</div>
-  </div>
-</div>
-
-<h1>⚠️ Relatório de Conteúdo Ilícito</h1>
-<p style="text-align:center;color:#555;font-size:12px;margin-bottom:20px">Documento para encaminhamento às autoridades competentes</p>
-
-<div class="box-red">
-  <strong>AVISO LEGAL:</strong> Documento gerado em cumprimento ao <strong>Art. 241-A do ECA (Lei 8.069/1990)</strong>,
-  <strong>Marco Civil da Internet (Lei 12.965/2014)</strong>, <strong>Lei 13.431/2017</strong> e <strong>LGPD (Lei 13.709/2018)</strong>.
-  O operador da plataforma comunica o conteúdo às autoridades conforme obrigação legal.
-</div>
-
-<h2>1. Identificação da Denúncia</h2>
-<div class="row"><span class="lbl">Protocolo:</span><span class="val"><strong>RPT-${(report.id||'').slice(0,8).toUpperCase()}</strong></span></div>
-<div class="row"><span class="lbl">ID completo da denúncia:</span><span class="val" style="font-family:monospace">${report.id||'—'}</span></div>
-<div class="row"><span class="lbl">Data/Hora da Denúncia:</span><span class="val">${fmt(report.created_at)}</span></div>
-<div class="row"><span class="lbl">Data/Hora do Relatório:</span><span class="val">${now.toLocaleString('pt-BR')}</span></div>
-<div class="row"><span class="lbl">Tipo de Conteúdo:</span><span class="val">${reportType}</span></div>
-<div class="row"><span class="lbl">ID do Conteúdo:</span><span class="val" style="font-family:monospace">${report.target_id||'—'}</span></div>
-${albumName !== '—' ? `<div class="row"><span class="lbl">Nome do Álbum:</span><span class="val"><strong>${albumName}</strong></span></div>` : ''}
-<div class="row"><span class="lbl">Motivo Reportado:</span><span class="val"><strong style="color:#c62828">${report.reason||'—'}</strong></span></div>
-${report.description ? `<div class="row"><span class="lbl">Descrição do Denunciante:</span><span class="val">${report.description}</span></div>` : ''}
-
-<h2>2. Usuário Denunciado</h2>
-<div class="row"><span class="lbl">Nome / Apelido:</span><span class="val"><strong>${targetDisplayName}</strong></span></div>
-<div class="row"><span class="lbl">Nome de usuário:</span><span class="val">@${targetUsername}</span></div>
-<div class="row"><span class="lbl">E-mail cadastrado:</span><span class="val"><strong>${targetEmail}</strong></span></div>
-<div class="row"><span class="lbl">ID na plataforma:</span><span class="val" style="font-family:monospace">${targetUserId}</span></div>
-
-<h2>3. Usuário Denunciante</h2>
-<div class="row"><span class="lbl">Nome de usuário:</span><span class="val">@${report.reporter_username||'Anônimo'}</span></div>
-<div class="row"><span class="lbl">ID na plataforma:</span><span class="val" style="font-family:monospace">${report.reporter_id||'—'}</span></div>
-
-<h2>4. Evidências Visuais — ${albumPhotos.length} imagem(ns) encontrada(s)</h2>
-<div class="photos">
-  ${photosSection}
-</div>
-
-<h2>5. Informações da Plataforma e Ações Tomadas</h2>
-<div class="row"><span class="lbl">Plataforma:</span><span class="val">Pineapple Moments</span></div>
-<div class="row"><span class="lbl">URL:</span><span class="val">https://pineapple-moments.vercel.app</span></div>
-<div class="row"><span class="lbl">E-mail do Responsável:</span><span class="val">rafaelborella49@gmail.com</span></div>
-<div class="row"><span class="lbl">CNPJ / CPF Responsável:</span><span class="val">____________________________________________</span></div>
-<div class="row"><span class="lbl">Data das Ações:</span><span class="val">${now.toLocaleString('pt-BR')}</span></div>
-<div class="row"><span class="lbl">Ações tomadas:</span><span class="val">☑ Conteúdo removido &nbsp;&nbsp; ☑ Conta suspensa/banida &nbsp;&nbsp; ☑ Relatório gerado</span></div>
-
-<div class="box-yellow">
-  <strong>Declaração do Operador:</strong> Imediatamente após a identificação do conteúdo ilícito foram tomadas as seguintes
-  medidas: remoção do conteúdo da plataforma, suspensão/banimento da conta do usuário responsável e geração deste relatório.
-  O operador se compromete a cooperar plenamente com as investigações, fornecendo logs de acesso, endereços IP e demais
-  dados técnicos mediante requisição judicial, conforme previsto no Art. 15 do Marco Civil da Internet.
-</div>
-
-<h2>6. Autoridades para Encaminhamento</h2>
-<div class="auth-grid">
-  <div class="auth-card"><div class="auth-name">🏛️ Polícia Federal</div><div class="auth-info">delegacia.dpf.gov.br<br>Crimes federais, CSAM, tráfico online</div></div>
-  <div class="auth-card"><div class="auth-name">🛡️ SaferNet Brasil</div><div class="auth-info">safernet.org.br/denuncie<br>Especializada em crimes online e CSAM — recebe e encaminha à PF</div></div>
-  <div class="auth-card"><div class="auth-name">📞 Disque 100</div><div class="auth-info">Direitos Humanos — gratuito 24h<br>Casos envolvendo crianças e adolescentes</div></div>
-  <div class="auth-card"><div class="auth-name">🏢 Polícia Civil</div><div class="auth-info">Delegacia local ou online<br>Ameaças, assédio, injúria, crimes comuns</div></div>
-</div>
-
-<div class="sig-grid">
-  <div><div class="sig-line">Assinatura do Responsável Legal</div><div style="font-size:11px;color:#555;text-align:center;margin-top:6px">Nome completo / CPF</div></div>
-  <div><div class="sig-line">Data e Local</div></div>
-</div>
-
-<div class="footer">
-  Documento gerado automaticamente pelo sistema de moderação do Pineapple Moments.
-  Protocolo RPT-${(report.id||'').slice(0,8).toUpperCase()} — ${now.toLocaleString('pt-BR')} — rafaelborella49@gmail.com
-</div>
-
-<div class="noprint" style="margin-top:28px;text-align:center;padding-bottom:40px">
-  <button onclick="window.print()" style="padding:12px 32px;background:#1B3A1F;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;margin-right:12px">
-    🖨️ Imprimir / Salvar como PDF
-  </button>
-  <button onclick="window.close()" style="padding:12px 24px;background:#f5f5f5;color:#333;border:1px solid #ddd;border-radius:8px;font-size:14px;cursor:pointer">
-    Fechar
-  </button>
-</div>
-</body>
-</html>`
-
+      : pageItems.length > 0
+        ? '<div style="padding:14px;background:#fff8e1;border:2px solid #ffe082;border-radius:8px">' +
+            '<p style="font-size:13px;color:#856404;font-weight:bold;margin-bottom:8px">⚠️ Screenshots não disponíveis — acesse o álbum antes de deletar:</p>' +
+            pageItems.map((item, i) =>
+              '<p style="margin:4px 0"><a href="' + origin + '/album/' + item.albumId + '" target="_blank" style="color:#1565c0;font-weight:bold">👁️ Página ' + (i+1) + ' — Ver álbum →</a></p>'
+            ).join('') +
+          '</div>'
+        : '<p style="color:#888;font-style:italic;padding:16px">Nenhuma página encontrada neste álbum.</p>'
     // Salva relatório arquivado no banco (retenção 6 meses conforme Marco Civil)
     try {
       await supabase.rpc('admin_archive_report', {
