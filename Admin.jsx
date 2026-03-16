@@ -187,32 +187,55 @@ export default function Admin() {
 
     try {
       if (report.target_type === 'album' && report.target_id) {
-        const { data: album } = await supabase
-          .from('albums').select('name, owner_id, profiles(display_name, username)')
-          .eq('id', report.target_id).maybeSingle()
+        // Busca álbum separado
+        const { data: album, error: albumErr } = await supabase
+          .from('albums').select('name, owner_id').eq('id', report.target_id).maybeSingle()
+        console.log('[relatório] album:', album, albumErr)
 
         if (album) {
           albumName = album.name || '—'
-          targetDisplayName = album.profiles?.display_name || '—'
-          targetUsername = album.profiles?.username || '—'
           targetUserId = album.owner_id || '—'
 
-          const { data: ul } = await supabase.rpc('admin_get_users', { search_term: targetUsername, page_num: 1, page_size: 1 })
-          if (ul?.[0]) targetEmail = ul[0].email || '—'
+          // Busca perfil do dono separado
+          if (album.owner_id) {
+            const { data: profile } = await supabase
+              .from('profiles').select('display_name, username')
+              .eq('id', album.owner_id).maybeSingle()
+            if (profile) {
+              targetDisplayName = profile.display_name || '—'
+              targetUsername = profile.username || '—'
+            }
 
-          // Busca fotos nas páginas
-          const { data: pages } = await supabase.from('pages').select('svg_paths').eq('album_id', report.target_id)
-          if (pages) {
+            // Busca email via admin_get_users
+            const { data: ul } = await supabase.rpc('admin_get_users', {
+              search_term: targetUsername !== '—' ? targetUsername : null,
+              page_num: 1, page_size: 10
+            })
+            const found = ul?.find(u => u.id === album.owner_id)
+            if (found) targetEmail = found.email || '—'
+            else if (ul?.[0]) targetEmail = ul[0].email || '—'
+          }
+
+          // Busca páginas e fotos
+          const { data: pages, error: pagesErr } = await supabase
+            .from('pages').select('svg_paths').eq('album_id', report.target_id)
+          console.log('[relatório] pages:', pages?.length, pagesErr)
+
+          if (pages && pages.length > 0) {
             for (const pg of pages) {
               try {
-                const els = typeof pg.svg_paths === 'string' ? JSON.parse(pg.svg_paths) : (pg.svg_paths || [])
+                const raw = pg.svg_paths
+                const els = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : [])
+                console.log('[relatório] elementos na página:', els.length, els.map(e=>e.type))
                 for (const el of els) {
-                  if (el.type === 'image' && el.src && (el.src.startsWith('http') || el.src.startsWith('data:')))
+                  if (el.type === 'image' && el.src) {
                     albumPhotos.push(el.src)
+                  }
                 }
-              } catch(_) {}
+              } catch(parseErr) { console.warn('[relatório] parse erro:', parseErr) }
             }
           }
+          console.log('[relatório] fotos encontradas:', albumPhotos.length)
         }
       }
 
