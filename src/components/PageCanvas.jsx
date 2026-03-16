@@ -49,6 +49,8 @@ const DRAW_TOOLS = [
 
 const DRAW_COLORS = ['#1B3A1F','#e53935','#F5C800','#3A8C3F','#FF6B9D','#667EEA','#FF6D00','#00ACC1','#9C27B0','#ffffff']
 
+
+
 const POSTIT_COLORS = [
   { id:'yellow',  bg:'#FFF176', border:'#F9A825', shadow:'rgba(249,168,37,0.3)',  label:'Amarelo' },
   { id:'pink',    bg:'#F8BBD0', border:'#E91E8C', shadow:'rgba(233,30,140,0.25)', label:'Rosa'    },
@@ -105,6 +107,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
   const drawPath   = useRef(null)   // path SVG atual sendo desenhado
   const drawPoints = useRef([])     // pontos do stroke atual
   const [svgPaths, setSvgPaths] = useState(page.svg_paths || [])
+
   const [editingPostit, setEditingPostit] = useState(null)  // id do postit sendo editado
   const svgPathsRef = useRef(svgPaths)
 
@@ -392,6 +395,8 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
     setPanel('none')
   }
 
+
+
   const handleUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -445,6 +450,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
           <div style={{ display:'flex', gap:5 }}>
             <button style={toolBtn(false)} onClick={addText} title="Texto">T</button>
             <button style={toolBtn(panel==='stickers')} onClick={() => setPanel(p => p==='stickers'?'none':'stickers')} title="Adesivos">🌸</button>
+            <button style={toolBtn(panel==='postit')} onClick={() => setPanel(p => p==='postit'?'none':'postit')} title="Post-it">📝</button>
             <button style={toolBtn(false)} onClick={() => fileRef.current?.click()} disabled={uploading} title="Foto">
               {uploading ? <span className="loader loader-sm" style={{margin:0}}/> : '📷'}
             </button>
@@ -567,6 +573,24 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
         </div>
       )}
 
+      {/* ── Post-it Panel ── */}
+      {panel === 'postit' && isOwner && (
+        <div style={{ background:'white', borderRadius:16, padding:'12px 16px', boxShadow:'var(--shadow)', width:'100%', maxWidth:595, animation:'slideDown 0.2s ease' }}>
+          <p style={{ fontSize:11, fontWeight:700, color:'var(--dark-muted)', marginBottom:10, textAlign:'center' }}>📝 Escolha a cor do post-it</p>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'center' }}>
+            {POSTIT_COLORS.map(c => (
+              <button key={c.id} onClick={() => addPostit(c.id)} title={c.label}
+                style={{ width:52, height:52, background:c.bg, border:`2px solid ${c.line}`, borderRadius:6, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, boxShadow:`2px 3px 6px ${c.line}40`, transition:'transform 0.15s', transform:'rotate(-3deg)', position:'relative' }}
+                onMouseOver={e => e.currentTarget.style.transform='scale(1.12) rotate(-1deg)'}
+                onMouseOut={e => e.currentTarget.style.transform='rotate(-3deg)'}>
+                <span style={{ fontSize:8, fontWeight:700, color:c.text, fontFamily:'Quicksand' }}>{c.label}</span>
+                <span style={{ position:'absolute', top:0, left:0, right:0, height:4, background:c.line, borderRadius:'4px 4px 0 0', opacity:0.5 }}/>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Sticker Panel ── */}
       {panel === 'stickers' && isOwner && (
         <div style={{ background:'white', borderRadius:16, padding:14, boxShadow:'var(--shadow)', width:'100%', maxWidth:595, animation:'slideDown 0.2s ease' }}>
@@ -646,6 +670,27 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
               </div>
             </div>
           )}
+          {selEl.type === 'postit' && (
+            <div style={{ display:'flex', gap:14, flexWrap:'wrap', alignItems:'center' }}>
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:'var(--dark-muted)', display:'block', marginBottom:5 }}>Cor</label>
+                <div style={{ display:'flex', gap:6 }}>
+                  {POSTIT_COLORS.map(c => (
+                    <button key={c.id} onClick={() => upd(selected, { colorId:c.id, bg:c.bg, lineColor:c.line, textColor:c.text })}
+                      style={{ width:24, height:24, background:c.bg, border:`2px solid ${selEl.colorId===c.id?c.line:'transparent'}`, borderRadius:4, cursor:'pointer', boxShadow: selEl.colorId===c.id?`0 0 0 2px ${c.line}`:'none' }}/>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:'var(--dark-muted)', display:'block', marginBottom:5 }}>Tamanho texto: {selEl.fontSize}px</label>
+                <input type="range" min={11} max={32} value={selEl.fontSize||17} onChange={e => upd(selected,{fontSize:+e.target.value})} style={{ width:110, accentColor:'var(--green)' }}/>
+              </div>
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:'var(--dark-muted)', display:'block', marginBottom:5 }}>Rotação: {Math.round(selEl.rotation||0)}°</label>
+                <input type="range" min={-30} max={30} value={selEl.rotation||0} onChange={e => upd(selected,{rotation:+e.target.value})} style={{ width:110, accentColor:'var(--green)' }}/>
+              </div>
+            </div>
+          )}
           {selEl.type === 'sticker' && (
             <div>
               <label style={{ fontSize:11, fontWeight:700, color:'var(--dark-muted)', display:'block', marginBottom:5 }}>Tamanho: {selEl.fontSize}px</label>
@@ -669,7 +714,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
 
           return (
             <div key={el.id} data-elid={el.id}
-              style={{ position:'absolute', left:el.x, top:el.y, width:w, height:h, cursor: isDrawMode ? 'crosshair' : (isOwner?'grab':'default'), userSelect:'none', zIndex:isSel?20:1, overflow: el.type==='text' ? 'visible' : 'hidden' }}
+              style={{ position:'absolute', left:el.x, top:el.y, width:w, height:h, cursor: isDrawMode ? 'crosshair' : (isOwner?'grab':'default'), userSelect:'none', zIndex:isSel?20:1, overflow: (el.type==='text' || el.type==='postit') ? 'visible' : 'hidden' }}
               onMouseDown={e => startMove(e, el.id)}
               onTouchStart={e => startMove(e, el.id)}
               onClick={e => { e.stopPropagation(); if (isOwner && !isDrawMode) setSelected(el.id) }}>
@@ -722,6 +767,84 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
                   }
                 </div>
               )}
+
+              {el.type === 'postit' && (() => {
+                const isEditing = editingPostit === el.id && isOwner && !isDrawMode
+                return (
+                  <div
+                    style={{
+                      width: w, height: h,
+                      background: el.bg || '#FFF59D',
+                      borderTop: `6px solid ${el.lineColor || '#F9A825'}`,
+                      borderLeft: `1px solid ${el.lineColor || '#F9A825'}40`,
+                      borderRight: `1px solid ${el.lineColor || '#F9A825'}40`,
+                      borderBottom: `1px solid ${el.lineColor || '#F9A825'}40`,
+                      borderRadius: '2px 2px 4px 4px',
+                      boxShadow: `3px 5px 12px ${el.lineColor || '#F9A825'}50, inset 0 0 0 1px ${el.lineColor || '#F9A825'}20`,
+                      transform: `rotate(${el.rotation || 0}deg)`,
+                      display: 'flex', flexDirection: 'column',
+                      overflow: 'hidden', position: 'relative',
+                      cursor: isDrawMode ? 'crosshair' : (isOwner ? (isEditing ? 'text' : 'grab') : 'default'),
+                    }}
+                    onDoubleClick={e => {
+                      e.stopPropagation()
+                      if (isOwner && !isDrawMode) {
+                        setSelected(el.id)
+                        setEditingPostit(el.id)
+                      }
+                    }}>
+                    {/* Linhas decorativas de caderno */}
+                    {Array.from({length: Math.floor(h/24)}).map((_, li) => (
+                      <div key={li} style={{ position:'absolute', left:10, right:10, top: 28 + li*24, height:1, background:`${el.lineColor||'#F9A825'}25`, pointerEvents:'none' }}/>
+                    ))}
+                    {/* Furos de caderno */}
+                    <div style={{ position:'absolute', left:14, top:'35%', width:8, height:8, borderRadius:'50%', background:`${el.lineColor||'#F9A825'}40`, pointerEvents:'none' }}/>
+                    {/* Texto ou textarea */}
+                    {isEditing
+                      ? <textarea
+                          autoFocus
+                          value={el.text || ''}
+                          onChange={e => {
+                            const v = e.target.value
+                            setElements(els => els.map(it => it.id === el.id ? {...it, text: v} : it))
+                          }}
+                          onBlur={async e => {
+                            const txt = e.target.value.trim()
+                            if (txt.length > 2) {
+                              const { moderateText } = await import('../lib/moderation.js')
+                              const r = await moderateText(txt, userId)
+                              if (r.blocked) {
+                                toast(`Texto bloqueado: ${r.label} ⚠️`, 'error')
+                                setElements(els => els.map(it => it.id === el.id ? {...it, text: ''} : it))
+                              }
+                            }
+                            setEditingPostit(null)
+                          }}
+                          onMouseDown={e => e.stopPropagation()}
+                          onTouchStart={e => e.stopPropagation()}
+                          style={{
+                            flex:1, background:'transparent', border:'none', outline:'none',
+                            resize:'none', padding:'8px 10px 8px 28px',
+                            fontFamily: el.fontFamily||'Caveat', fontSize: el.fontSize||17,
+                            color: el.textColor||'#5D4037', lineHeight:1.55,
+                            zIndex:100,
+                          }}
+                          placeholder="Escreva aqui... ✏️"
+                        />
+                      : <div style={{
+                            flex:1, padding:'8px 10px 8px 28px',
+                            fontFamily: el.fontFamily||'Caveat', fontSize: el.fontSize||17,
+                            color: el.textColor||'#5D4037', lineHeight:1.55,
+                            wordBreak:'break-word', whiteSpace:'pre-wrap', overflowY:'hidden',
+                          }}>
+                          {el.text || (isOwner
+                            ? <span style={{color:`${el.lineColor||'#F9A825'}80`, fontStyle:'italic', fontSize:13}}>Duplo clique para editar ✏️</span>
+                            : null)}
+                        </div>
+                    }
+                  </div>
+                )
+              })()}
 
               {el.type === 'photo' && (
                 <img src={el.url} alt="" draggable={false}
@@ -777,6 +900,84 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
                   }
                 </div>
               )}
+
+              {el.type === 'postit' && (() => {
+                const isEditing = editingPostit === el.id && isOwner && !isDrawMode
+                return (
+                  <div
+                    style={{
+                      width: w, height: h,
+                      background: el.bg || '#FFF59D',
+                      borderTop: `6px solid ${el.lineColor || '#F9A825'}`,
+                      borderLeft: `1px solid ${el.lineColor || '#F9A825'}40`,
+                      borderRight: `1px solid ${el.lineColor || '#F9A825'}40`,
+                      borderBottom: `1px solid ${el.lineColor || '#F9A825'}40`,
+                      borderRadius: '2px 2px 4px 4px',
+                      boxShadow: `3px 5px 12px ${el.lineColor || '#F9A825'}50, inset 0 0 0 1px ${el.lineColor || '#F9A825'}20`,
+                      transform: `rotate(${el.rotation || 0}deg)`,
+                      display: 'flex', flexDirection: 'column',
+                      overflow: 'hidden', position: 'relative',
+                      cursor: isDrawMode ? 'crosshair' : (isOwner ? (isEditing ? 'text' : 'grab') : 'default'),
+                    }}
+                    onDoubleClick={e => {
+                      e.stopPropagation()
+                      if (isOwner && !isDrawMode) {
+                        setSelected(el.id)
+                        setEditingPostit(el.id)
+                      }
+                    }}>
+                    {/* Linhas decorativas de caderno */}
+                    {Array.from({length: Math.floor(h/24)}).map((_, li) => (
+                      <div key={li} style={{ position:'absolute', left:10, right:10, top: 28 + li*24, height:1, background:`${el.lineColor||'#F9A825'}25`, pointerEvents:'none' }}/>
+                    ))}
+                    {/* Furos de caderno */}
+                    <div style={{ position:'absolute', left:14, top:'35%', width:8, height:8, borderRadius:'50%', background:`${el.lineColor||'#F9A825'}40`, pointerEvents:'none' }}/>
+                    {/* Texto ou textarea */}
+                    {isEditing
+                      ? <textarea
+                          autoFocus
+                          value={el.text || ''}
+                          onChange={e => {
+                            const v = e.target.value
+                            setElements(els => els.map(it => it.id === el.id ? {...it, text: v} : it))
+                          }}
+                          onBlur={async e => {
+                            const txt = e.target.value.trim()
+                            if (txt.length > 2) {
+                              const { moderateText } = await import('../lib/moderation.js')
+                              const r = await moderateText(txt, userId)
+                              if (r.blocked) {
+                                toast(`Texto bloqueado: ${r.label} ⚠️`, 'error')
+                                setElements(els => els.map(it => it.id === el.id ? {...it, text: ''} : it))
+                              }
+                            }
+                            setEditingPostit(null)
+                          }}
+                          onMouseDown={e => e.stopPropagation()}
+                          onTouchStart={e => e.stopPropagation()}
+                          style={{
+                            flex:1, background:'transparent', border:'none', outline:'none',
+                            resize:'none', padding:'8px 10px 8px 28px',
+                            fontFamily: el.fontFamily||'Caveat', fontSize: el.fontSize||17,
+                            color: el.textColor||'#5D4037', lineHeight:1.55,
+                            zIndex:100,
+                          }}
+                          placeholder="Escreva aqui... ✏️"
+                        />
+                      : <div style={{
+                            flex:1, padding:'8px 10px 8px 28px',
+                            fontFamily: el.fontFamily||'Caveat', fontSize: el.fontSize||17,
+                            color: el.textColor||'#5D4037', lineHeight:1.55,
+                            wordBreak:'break-word', whiteSpace:'pre-wrap', overflowY:'hidden',
+                          }}>
+                          {el.text || (isOwner
+                            ? <span style={{color:`${el.lineColor||'#F9A825'}80`, fontStyle:'italic', fontSize:13}}>Duplo clique para editar ✏️</span>
+                            : null)}
+                        </div>
+                    }
+                  </div>
+                )
+              })()}
 
               {el.type === 'photo' && (
                   <div onMouseDown={e => startRotate(e, el)}
