@@ -269,103 +269,65 @@ export default function Admin() {
     const pageItems  = albumPhotos.filter(i => i.type === 'page')
     const photoItems = albumPhotos.filter(i => i.type === 'photo')
     const origin = window.location.origin
-    let pageScreenshots = []
 
-    if (pageItems.length > 0) {
-      toast('Capturando páginas do álbum... aguarde ⏳', 'success')
-      // Carrega html2canvas dinamicamente
-      await new Promise((resolve) => {
-        const script = document.createElement('script')
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'
-        script.onload = resolve
-        script.onerror = resolve
-        document.head.appendChild(script)
-      })
-
-      for (let i = 0; i < pageItems.length; i++) {
-        const item = pageItems[i]
-        try {
-          // Busca dados da página para renderizar
-          const { data: pgData } = await supabase
-            .from('pages').select('svg_paths, bg_color').eq('id', item.pageId).single()
-
-          if (pgData) {
-            // Cria canvas temporário para renderizar a página
-            const CANVAS_W = 595, CANVAS_H = 842
-            const container = document.createElement('div')
-            container.style.cssText = `position:fixed;left:-9999px;top:0;width:${CANVAS_W}px;height:${CANVAS_H}px;background:${pgData.bg_color||'#fff'};overflow:hidden;z-index:-1`
-
-            // Renderiza elementos da página
-            const els = typeof pgData.svg_paths === 'string' ? JSON.parse(pgData.svg_paths||'[]') : (pgData.svg_paths||[])
-            for (const el of els) {
-              if (el.type === 'image' && el.src) {
-                const img = document.createElement('img')
-                img.src = el.src
-                img.crossOrigin = 'anonymous'
-                img.style.cssText = `position:absolute;left:${el.x||0}px;top:${el.y||0}px;width:${el.w||100}px;height:${el.h||100}px;object-fit:cover`
-                container.appendChild(img)
-              }
-              if (el.type === 'text' && el.text) {
-                const div = document.createElement('div')
-                div.textContent = el.text
-                div.style.cssText = `position:absolute;left:${el.x||0}px;top:${el.y||0}px;font-size:${el.fontSize||14}px;color:${el.color||'#000'};white-space:pre-wrap;max-width:${CANVAS_W}px`
-                container.appendChild(div)
-              }
-              if (el.type === 'sticker' && el.emoji) {
-                const span = document.createElement('span')
-                span.textContent = el.emoji
-                span.style.cssText = `position:absolute;left:${el.x||0}px;top:${el.y||0}px;font-size:${el.fontSize||32}px`
-                container.appendChild(span)
-              }
-            }
-
-            document.body.appendChild(container)
-            // Aguarda imagens carregarem
-            await new Promise(r => setTimeout(r, 800))
-
-            if (window.html2canvas) {
-              try {
-                const canvas = await window.html2canvas(container, { useCORS: true, allowTaint: true, scale: 0.5, logging: false })
-                pageScreenshots.push({ dataUrl: canvas.toDataURL('image/jpeg', 0.8), index: i + 1, pageId: item.pageId })
-              } catch(e) { console.warn('html2canvas erro:', e) }
-            }
-            document.body.removeChild(container)
-          }
-        } catch(e) { console.warn('Erro captura página:', e) }
+    // Converte fotos para base64 para incluir direto no PDF (resolve CORS)
+    toast('Carregando imagens... ⏳', 'success')
+    const photosBase64 = []
+    for (const item of photoItems) {
+      try {
+        const res = await fetch(item.src, { mode: 'cors' })
+        if (res.ok) {
+          const blob = await res.blob()
+          const b64 = await new Promise((resolve) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result)
+            reader.onerror = () => resolve(null)
+            reader.readAsDataURL(blob)
+          })
+          photosBase64.push({ b64, pageId: item.pageId, src: item.src })
+        } else {
+          photosBase64.push({ b64: null, pageId: item.pageId, src: item.src })
+        }
+      } catch(e) {
+        console.warn('Erro ao converter foto:', e)
+        photosBase64.push({ b64: null, pageId: item.pageId, src: item.src })
       }
     }
+    // Monta seção de evidências com fotos em base64 (sem problemas de CORS)
+    const fotosConvertidas = photosBase64.filter(p => p.b64)
+    const fotosFallback    = photosBase64.filter(p => !p.b64)
 
-    // Monta seção de evidências — fotos diretas + screenshots de páginas
-    const directPhotosHtml = photoItems.map((item, i) =>
-      `<div style="display:inline-block;margin:6px;border:2px solid #c62828;border-radius:6px;overflow:hidden;vertical-align:top">
-        <img src="${item.src.replace(/"/g,'&quot;')}" style="width:200px;height:150px;object-fit:cover;display:block"
-          crossorigin="anonymous" onerror="this.style.display='none';this.nextSibling.style.display='block'" />
-        <div style="display:none;width:200px;height:150px;background:#fdecea;display:flex;align-items:center;justify-content:center;font-size:11px;color:#c62828">Imagem não carregou</div>
-        <div style="font-size:10px;color:#666;padding:3px 8px;background:#fff3cd;text-align:center;font-weight:bold">📷 Foto ${i+1}</div>
+    const directPhotosHtml = fotosConvertidas.map((item, i) =>
+      `<div style="display:inline-block;margin:8px;border:3px solid #c62828;border-radius:8px;overflow:hidden;vertical-align:top;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
+        <img src="${" + item.b64 + "}" style="width:220px;height:165px;object-fit:cover;display:block" />
+        <div style="font-size:11px;color:#c62828;padding:4px 8px;background:#fff3cd;text-align:center;font-weight:bold">📷 Foto evidência ${i+1}</div>
       </div>`
     ).join('\n')
 
-    const screenshotsHtml = pageScreenshots.map(s =>
-      `<div style="margin:10px 0;border:2px solid #ddd;border-radius:8px;overflow:hidden">
-        <div style="background:#1B3A1F;color:white;padding:5px 12px;font-size:11px;font-weight:bold">📄 Screenshot Página ${s.index}</div>
-        <img src="${s.dataUrl}" style="width:100%;display:block" />
-      </div>`
-    ).join('\n')
+    const fallbackHtml = fotosFallback.length > 0 || photoItems.length === 0
+      ? pageItems.map((item, i) =>
+          `<div style="margin:8px 0;padding:12px;background:#f5f5f5;border:1px solid #ddd;border-radius:8px">
+            <p style="font-size:12px;font-weight:bold">📄 Página ${i+1} — Link direto:</p>
+            <a href="${origin}/album/${item.albumId}" target="_blank" style="font-size:12px;color:#1565c0;font-weight:bold">👁️ Ver álbum →</a>
+          </div>`
+        ).join('\n')
+      : ''
 
-    const fallbackHtml = pageItems.map((item, i) =>
-      `<div style="margin:8px 0;padding:12px;background:#f5f5f5;border:1px solid #ddd;border-radius:8px">
-        <p style="font-size:12px;font-weight:bold">📄 Página ${i+1} — ID: ${item.pageId}</p>
-        <a href="${origin}/album/${item.albumId}" target="_blank" style="font-size:12px;color:#1565c0;font-weight:bold">👁️ Ver álbum →</a>
-      </div>`
-    ).join('\n')
-
-    const photosSection = (directPhotosHtml || screenshotsHtml || fallbackHtml)
-      ? `<div style="margin-bottom:12px">
-          ${photoItems.length > 0 ? `<p style="font-size:12px;font-weight:bold;color:#c62828;margin-bottom:8px">📷 ${photoItems.length} foto(s) encontrada(s) nas páginas:</p>${directPhotosHtml}` : ''}
-          ${pageScreenshots.length > 0 ? `<p style="font-size:12px;font-weight:bold;margin:12px 0 8px">📄 Screenshots das páginas:</p>${screenshotsHtml}` : ''}
-          ${directPhotosHtml === '' && pageScreenshots.length === 0 ? fallbackHtml : ''}
+    const totalFotos = fotosConvertidas.length + fotosFallback.length
+    const photosSection = totalFotos > 0 || pageItems.length > 0
+      ? `<div>
+          ${fotosConvertidas.length > 0 ? `
+            <p style="font-size:12px;font-weight:bold;color:#c62828;margin-bottom:10px">
+              📷 ${fotosConvertidas.length} de ${totalFotos} foto(s) capturada(s) como evidência:
+            </p>
+            ${directPhotosHtml}` : ''}
+          ${fotosFallback.length > 0 ? `
+            <p style="font-size:11px;color:#888;margin:8px 0">
+              ⚠️ ${fotosFallback.length} foto(s) não puderam ser incorporadas (restrição CORS) — acesse pelo link abaixo antes de deletar.
+            </p>` : ''}
+          ${fallbackHtml}
         </div>`
-      : '<p style="color:#888;font-style:italic;padding:16px">Nenhuma foto ou página encontrada.</p>'
+      : '<p style="color:#888;font-style:italic;padding:16px">Nenhuma foto encontrada neste álbum.</p>'
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
