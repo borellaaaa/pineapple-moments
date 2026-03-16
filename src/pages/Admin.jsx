@@ -285,6 +285,12 @@ export default function Admin() {
       } catch { return null }
     }
 
+    // Abre janela imediatamente com loading
+    const win = window.open('', '_blank', 'width=900,height=800')
+    if (!win) { toast('Permita pop-ups para gerar o relatório', 'error'); return }
+    win.document.write('<html><body style="font-family:Arial;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f5f5f5"><div style="text-align:center"><div style="font-size:48px;margin-bottom:16px">⏳</div><p style="font-size:18px;font-weight:bold;color:#1B3A1F">Gerando relatório...</p><p style="color:#888;font-size:13px">Capturando páginas do álbum, aguarde</p></div></body></html>')
+    win.document.close()
+
     // ── Carrega html2canvas ───────────────────────────────────────────────────
     toast('Gerando prints das páginas... aguarde ⏳', 'success')
     await new Promise((resolve) => {
@@ -441,6 +447,122 @@ export default function Admin() {
             ).join('') +
           '</div>'
         : '<p style="color:#888;font-style:italic;padding:16px">Nenhuma página encontrada neste álbum.</p>'
+    // ── Monta HTML do relatório ───────────────────────────────────────────────
+    const protocol = 'RPT-' + (report.id||'').slice(0,8).toUpperCase()
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Relatório ${protocol} — Pineapple Moments</title>
+<style>
+  body{font-family:Arial,sans-serif;font-size:13px;color:#111;padding:40px;max-width:850px;margin:0 auto}
+  h1{font-size:18px;color:#c62828;text-align:center;text-transform:uppercase;margin:20px 0 6px}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#555;border-bottom:1px solid #ddd;padding-bottom:4px;margin:20px 0 12px}
+  .header{display:flex;justify-content:space-between;border-bottom:3px solid #1B3A1F;padding-bottom:16px;margin-bottom:20px}
+  .logo{font-size:20px;font-weight:bold;color:#1B3A1F}
+  .row{display:flex;gap:8px;margin-bottom:8px}
+  .lbl{font-weight:bold;min-width:220px;color:#333;font-size:12px}
+  .val{color:#111;font-size:12px;flex:1;word-break:break-all}
+  .box-red{background:#fdecea;border-left:4px solid #c62828;padding:12px 16px;border-radius:4px;margin:14px 0;font-size:12px;line-height:1.7}
+  .box-yellow{background:#fff3cd;border-left:4px solid #f5a623;padding:12px 16px;border-radius:4px;margin:14px 0;font-size:12px;line-height:1.7}
+  .auth-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+  .auth-card{border:1px solid #ddd;padding:12px;border-radius:6px}
+  .auth-name{font-weight:bold;color:#1B3A1F;font-size:12px}
+  .auth-info{font-size:11px;color:#555;margin-top:4px}
+  .sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:48px}
+  .sig-line{border-top:1px solid #333;padding-top:6px;font-size:11px;color:#555;text-align:center;margin-top:44px}
+  .footer{margin-top:32px;padding-top:12px;border-top:1px solid #ddd;font-size:11px;color:#888}
+  .page-shot{margin:12px 0;border:3px solid #1B3A1F;border-radius:8px;overflow:hidden;page-break-inside:avoid}
+  .page-shot-header{background:#1B3A1F;color:white;padding:6px 14px;font-size:12px;font-weight:bold}
+  @media print{.noprint{display:none}}
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="logo">🍍 Pineapple Moments</div>
+    <div style="font-size:11px;color:#555">pineapple-moments.vercel.app</div>
+  </div>
+  <div style="text-align:right;font-size:11px;color:#555">
+    <div>Gerado em: ${now.toLocaleString('pt-BR')}</div>
+    <div style="font-weight:bold;color:#c62828">Protocolo: ${protocol}</div>
+  </div>
+</div>
+
+<h1>⚠️ Relatório de Conteúdo Ilícito</h1>
+<p style="text-align:center;color:#555;font-size:12px;margin-bottom:20px">Documento para encaminhamento às autoridades competentes</p>
+
+<div class="box-red">
+  <strong>AVISO LEGAL:</strong> Gerado em cumprimento ao <strong>Art. 241-A do ECA (Lei 8.069/1990)</strong>,
+  <strong>Marco Civil da Internet (Lei 12.965/2014)</strong>, <strong>Lei 13.431/2017</strong> e <strong>LGPD (Lei 13.709/2018)</strong>.
+</div>
+
+<h2>1. Identificação da Denúncia</h2>
+<div class="row"><span class="lbl">Protocolo:</span><span class="val"><strong>${protocol}</strong></span></div>
+<div class="row"><span class="lbl">ID da denúncia:</span><span class="val" style="font-family:monospace">${report.id||'—'}</span></div>
+<div class="row"><span class="lbl">Data/Hora da Denúncia:</span><span class="val">${fmt(report.created_at)}</span></div>
+<div class="row"><span class="lbl">Data/Hora do Relatório:</span><span class="val">${now.toLocaleString('pt-BR')}</span></div>
+<div class="row"><span class="lbl">Tipo de Conteúdo:</span><span class="val">${reportType}</span></div>
+<div class="row"><span class="lbl">ID do Conteúdo:</span><span class="val" style="font-family:monospace">${report.target_id||'—'}</span></div>
+${albumName !== '—' ? '<div class="row"><span class="lbl">Nome do Álbum:</span><span class="val"><strong>' + albumName + '</strong></span></div>' : ''}
+<div class="row"><span class="lbl">Motivo:</span><span class="val"><strong style="color:#c62828">${report.reason||'—'}</strong></span></div>
+${report.description ? '<div class="row"><span class="lbl">Descrição:</span><span class="val">' + (report.description||'') + '</span></div>' : ''}
+
+<h2>2. Usuário Denunciado</h2>
+<div class="row"><span class="lbl">Nome / Apelido:</span><span class="val"><strong>${targetDisplayName}</strong></span></div>
+<div class="row"><span class="lbl">Nome de usuário:</span><span class="val">@${targetUsername}</span></div>
+<div class="row"><span class="lbl">E-mail cadastrado:</span><span class="val"><strong>${targetEmail}</strong></span></div>
+<div class="row"><span class="lbl">ID na plataforma:</span><span class="val" style="font-family:monospace">${targetUserId}</span></div>
+
+<h2>3. Usuário Denunciante</h2>
+<div class="row"><span class="lbl">Nome de usuário:</span><span class="val">@${report.reporter_username||'Anônimo'}</span></div>
+<div class="row"><span class="lbl">ID na plataforma:</span><span class="val" style="font-family:monospace">${report.reporter_id||'—'}</span></div>
+
+<h2>4. Evidências Visuais — ${pageScreenshots.length} página(s) capturada(s)</h2>
+${photosSection}
+
+<h2>5. Informações da Plataforma</h2>
+<div class="row"><span class="lbl">Plataforma:</span><span class="val">Pineapple Moments</span></div>
+<div class="row"><span class="lbl">URL:</span><span class="val">https://pineapple-moments.vercel.app</span></div>
+<div class="row"><span class="lbl">E-mail do Responsável:</span><span class="val">rafaelborella49@gmail.com</span></div>
+<div class="row"><span class="lbl">CNPJ / CPF:</span><span class="val">____________________________________________</span></div>
+<div class="row"><span class="lbl">Data das Ações:</span><span class="val">${now.toLocaleString('pt-BR')}</span></div>
+<div class="row"><span class="lbl">Ações tomadas:</span><span class="val">☑ Conteúdo removido &nbsp; ☑ Conta suspensa/banida &nbsp; ☑ Relatório gerado</span></div>
+
+<div class="box-yellow">
+  <strong>Declaração do Operador:</strong> Imediatamente após a identificação do conteúdo ilícito foram tomadas as
+  seguintes medidas: remoção do conteúdo, suspensão/banimento do usuário e geração deste relatório.
+  O operador cooperará com investigações fornecendo logs e IPs mediante requisição judicial (Marco Civil Art. 15).
+</div>
+
+<h2>6. Autoridades para Encaminhamento</h2>
+<div class="auth-grid">
+  <div class="auth-card"><div class="auth-name">🏛️ Polícia Federal</div><div class="auth-info">delegacia.dpf.gov.br — Crimes federais, CSAM</div></div>
+  <div class="auth-card"><div class="auth-name">🛡️ SaferNet Brasil</div><div class="auth-info">safernet.org.br/denuncie — Crimes online e CSAM</div></div>
+  <div class="auth-card"><div class="auth-name">📞 Disque 100</div><div class="auth-info">Gratuito 24h — Casos envolvendo menores</div></div>
+  <div class="auth-card"><div class="auth-name">🏢 Polícia Civil</div><div class="auth-info">Delegacia local — Ameaças, assédio, crimes comuns</div></div>
+</div>
+
+<div class="sig-grid">
+  <div><div class="sig-line">Assinatura do Responsável Legal</div><div style="font-size:11px;color:#555;text-align:center;margin-top:4px">Nome / CPF</div></div>
+  <div><div class="sig-line">Data e Local</div></div>
+</div>
+
+<div class="footer">Protocolo ${protocol} — ${now.toLocaleString('pt-BR')} — rafaelborella49@gmail.com</div>
+
+<div class="noprint" style="margin-top:28px;text-align:center;padding-bottom:40px">
+  <button onclick="window.print()" style="padding:12px 32px;background:#1B3A1F;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer">
+    🖨️ Imprimir / Salvar como PDF
+  </button>
+</div>
+</body>
+</html>`
+
+    // Escreve relatório na janela já aberta
+    win.document.open()
+    win.document.write(html)
+    win.document.close()
+
     // Salva relatório arquivado no banco (retenção 6 meses conforme Marco Civil)
     try {
       await supabase.rpc('admin_archive_report', {
@@ -462,10 +584,7 @@ export default function Admin() {
       console.log('[relatório] arquivado no banco para retenção de 6 meses')
     } catch(e) { console.warn('[relatório] erro ao arquivar:', e) }
 
-    const win = window.open('', '_blank', 'width=900,height=800')
-    if (!win) { toast('Permita pop-ups para gerar o relatório', 'error'); return }
-    win.document.write(html)
-    win.document.close()
+
   }
 
   const fmt = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—'
