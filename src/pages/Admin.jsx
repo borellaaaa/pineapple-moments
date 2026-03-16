@@ -43,6 +43,7 @@ export default function Admin() {
   const [reportFilter, setReportFilter] = useState('pending')
   const [logFilter, setLogFilter] = useState('all')
   const [logSearch, setLogSearch] = useState('')
+  const [archivedReports, setArchivedReports] = useState([])
 
   useEffect(() => {
     if (!user) return
@@ -79,10 +80,15 @@ export default function Admin() {
         safeRpc('admin_get_retention_stats'),
         safeRpc('admin_get_technical_logs', { p_user_id: null, p_event: null, p_limit: 200 }),
         safeRpc('admin_get_deletion_schedule'),
+        supabase.from('archived_reports').select('*').order('created_at', { ascending: false }).limit(100).then(r => ({ data: r.data })),
       ])
       setRetention(retData)
       setLogs(logsData || [])
       setDeletionSchedule(schedData || [])
+      // Relatórios arquivados
+      const { data: archivedData } = await supabase
+        .from('archived_reports').select('*').order('created_at', { ascending: false }).limit(100)
+      setArchivedReports(archivedData || [])
     } catch(e) { console.error('loadData error:', e) }
     setLoading(false)
   }, [search, page])
@@ -216,15 +222,34 @@ export default function Admin() {
             else if (ul?.[0]) targetEmail = ul[0].email || '—'
           }
 
-          // Busca IDs das páginas para gerar links de screenshot
+          // Busca páginas e fotos — elementos salvos como type:'photo' com campo url
           const { data: pages } = await supabase
-            .from('pages').select('id').eq('album_id', report.target_id).order('created_at', { ascending: true })
+            .from('pages').select('id, svg_paths, elements, bg_color')
+            .eq('album_id', report.target_id)
+            .order('created_at', { ascending: true })
           console.log('[relatório] páginas encontradas:', pages?.length)
+
           if (pages) {
             for (const pg of pages) {
               albumPhotos.push({ type: 'page', pageId: pg.id, albumId: report.target_id })
+              // Extrai URLs das fotos dos elementos
+              try {
+                // Tenta campo 'elements' primeiro, depois 'svg_paths'
+                const raw = pg.elements || pg.svg_paths
+                const els = typeof raw === 'string' ? JSON.parse(raw||'[]') : (Array.isArray(raw) ? raw : [])
+                for (const el of els) {
+                  // Fotos salvas como type:'photo' com campo 'url'
+                  if ((el.type === 'photo' || el.type === 'image') && (el.url || el.src)) {
+                    const photoUrl = el.url || el.src
+                    if (photoUrl.startsWith('http') || photoUrl.startsWith('data:')) {
+                      albumPhotos.push({ type: 'photo', src: photoUrl, pageId: pg.id })
+                    }
+                  }
+                }
+              } catch(e) { console.warn('[relatório] parse erro:', e) }
             }
           }
+          console.log('[relatório] total itens:', albumPhotos.length, albumPhotos.filter(i=>i.type==='photo').length, 'fotos')
         }
       }
 
@@ -240,11 +265,13 @@ export default function Admin() {
       }
     } catch(e) { console.warn('Erro relatório:', e) }
 
-    // Captura screenshots das páginas usando html2canvas
+    // Separa páginas e fotos
+    const pageItems  = albumPhotos.filter(i => i.type === 'page')
+    const photoItems = albumPhotos.filter(i => i.type === 'photo')
     const origin = window.location.origin
     let pageScreenshots = []
 
-    if (albumPhotos.length > 0) {
+    if (pageItems.length > 0) {
       toast('Capturando páginas do álbum... aguarde ⏳', 'success')
       // Carrega html2canvas dinamicamente
       await new Promise((resolve) => {
@@ -255,8 +282,8 @@ export default function Admin() {
         document.head.appendChild(script)
       })
 
-      for (let i = 0; i < albumPhotos.length; i++) {
-        const item = albumPhotos[i]
+      for (let i = 0; i < pageItems.length; i++) {
+        const item = pageItems[i]
         try {
           // Busca dados da página para renderizar
           const { data: pgData } = await supabase
@@ -308,24 +335,37 @@ export default function Admin() {
       }
     }
 
-    const photosSection = pageScreenshots.length > 0
-      ? pageScreenshots.map(s =>
-          `<div style="margin:10px 0;border:2px solid #ddd;border-radius:8px;overflow:hidden">
-            <div style="background:#1B3A1F;color:white;padding:5px 12px;font-size:11px;font-weight:bold">
-              📄 Página ${s.index} de ${pageScreenshots.length}
-            </div>
-            <img src="${s.dataUrl}" style="width:100%;display:block" />
-          </div>`
-        ).join('\n')
-      : albumPhotos.length > 0
-        ? albumPhotos.map((item, i) =>
-            `<div style="margin:10px 0;padding:14px;background:#f5f5f5;border:1px solid #ddd;border-radius:8px">
-              <p style="font-size:12px;font-weight:bold;margin-bottom:6px">📄 Página ${i+1} — screenshot não disponível</p>
-              <p style="font-size:11px;color:#555">Page ID: ${item.pageId}</p>
-              <a href="${origin}/album/${item.albumId}" target="_blank" style="font-size:12px;color:#1565c0;font-weight:bold">👁️ Ver álbum →</a>
-            </div>`
-          ).join('\n')
-        : '<p style="color:#888;font-style:italic;padding:16px">Nenhuma página encontrada neste álbum.</p>'
+    // Monta seção de evidências — fotos diretas + screenshots de páginas
+    const directPhotosHtml = photoItems.map((item, i) =>
+      `<div style="display:inline-block;margin:6px;border:2px solid #c62828;border-radius:6px;overflow:hidden;vertical-align:top">
+        <img src="${item.src.replace(/"/g,'&quot;')}" style="width:200px;height:150px;object-fit:cover;display:block"
+          crossorigin="anonymous" onerror="this.style.display='none';this.nextSibling.style.display='block'" />
+        <div style="display:none;width:200px;height:150px;background:#fdecea;display:flex;align-items:center;justify-content:center;font-size:11px;color:#c62828">Imagem não carregou</div>
+        <div style="font-size:10px;color:#666;padding:3px 8px;background:#fff3cd;text-align:center;font-weight:bold">📷 Foto ${i+1}</div>
+      </div>`
+    ).join('\n')
+
+    const screenshotsHtml = pageScreenshots.map(s =>
+      `<div style="margin:10px 0;border:2px solid #ddd;border-radius:8px;overflow:hidden">
+        <div style="background:#1B3A1F;color:white;padding:5px 12px;font-size:11px;font-weight:bold">📄 Screenshot Página ${s.index}</div>
+        <img src="${s.dataUrl}" style="width:100%;display:block" />
+      </div>`
+    ).join('\n')
+
+    const fallbackHtml = pageItems.map((item, i) =>
+      `<div style="margin:8px 0;padding:12px;background:#f5f5f5;border:1px solid #ddd;border-radius:8px">
+        <p style="font-size:12px;font-weight:bold">📄 Página ${i+1} — ID: ${item.pageId}</p>
+        <a href="${origin}/album/${item.albumId}" target="_blank" style="font-size:12px;color:#1565c0;font-weight:bold">👁️ Ver álbum →</a>
+      </div>`
+    ).join('\n')
+
+    const photosSection = (directPhotosHtml || screenshotsHtml || fallbackHtml)
+      ? `<div style="margin-bottom:12px">
+          ${photoItems.length > 0 ? `<p style="font-size:12px;font-weight:bold;color:#c62828;margin-bottom:8px">📷 ${photoItems.length} foto(s) encontrada(s) nas páginas:</p>${directPhotosHtml}` : ''}
+          ${pageScreenshots.length > 0 ? `<p style="font-size:12px;font-weight:bold;margin:12px 0 8px">📄 Screenshots das páginas:</p>${screenshotsHtml}` : ''}
+          ${directPhotosHtml === '' && pageScreenshots.length === 0 ? fallbackHtml : ''}
+        </div>`
+      : '<p style="color:#888;font-style:italic;padding:16px">Nenhuma foto ou página encontrada.</p>'
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -446,6 +486,27 @@ ${report.description ? `<div class="row"><span class="lbl">Descrição do Denunc
 </body>
 </html>`
 
+    // Salva relatório arquivado no banco (retenção 6 meses conforme Marco Civil)
+    try {
+      await supabase.rpc('admin_archive_report', {
+        p_report_id:           report.id,
+        p_protocol:            `RPT-${(report.id||'').slice(0,8).toUpperCase()}`,
+        p_target_type:         report.target_type,
+        p_target_id:           report.target_id,
+        p_album_name:          albumName !== '—' ? albumName : null,
+        p_target_user_id:      targetUserId !== '—' ? targetUserId : null,
+        p_target_username:     targetUsername !== '—' ? targetUsername : null,
+        p_target_email:        targetEmail !== '—' ? targetEmail : null,
+        p_target_display_name: targetDisplayName !== '—' ? targetDisplayName : null,
+        p_reporter_username:   report.reporter_username || null,
+        p_reason:              report.reason,
+        p_description:         report.description || null,
+        p_action_taken:        'report_generated',
+        p_page_count:          pageItems.length,
+      })
+      console.log('[relatório] arquivado no banco para retenção de 6 meses')
+    } catch(e) { console.warn('[relatório] erro ao arquivar:', e) }
+
     const win = window.open('', '_blank', 'width=900,height=800')
     if (!win) { toast('Permita pop-ups para gerar o relatório', 'error'); return }
     win.document.write(html)
@@ -453,6 +514,62 @@ ${report.description ? `<div class="row"><span class="lbl">Descrição do Denunc
   }
 
   const fmt = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—'
+  // ── Enviar relatório para o NCMEC CyberTipline ───────────────────────────
+  const sendNCMECReport = async (report) => {
+    if (!confirm('Enviar relatório ao NCMEC CyberTipline?\n\nIso deve ser feito APENAS para conteúdo sexual envolvendo menores (CSAM).\n\nConfirmar?')) return
+
+    toast('Enviando ao NCMEC... ⏳', 'success')
+
+    // Busca dados do álbum/usuário
+    let targetEmail = '—', targetUsername = '—', targetUserId = '—', albumId = report.target_id
+
+    if (report.target_type === 'album') {
+      const { data: album } = await supabase.from('albums').select('owner_id').eq('id', report.target_id).maybeSingle()
+      if (album?.owner_id) {
+        targetUserId = album.owner_id
+        const { data: profile } = await supabase.from('profiles').select('username').eq('id', album.owner_id).maybeSingle()
+        targetUsername = profile?.username || '—'
+        const { data: ul } = await supabase.rpc('admin_get_users', { search_term: targetUsername, page_num: 1, page_size: 1 })
+        if (ul?.[0]) targetEmail = ul[0].email || '—'
+      }
+    }
+
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+    const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/ncmec-report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ANON_KEY}`, 'apikey': ANON_KEY },
+      body: JSON.stringify({
+        report_id:            report.id,
+        album_id:             albumId,
+        reported_user_id:     targetUserId,
+        reported_user_email:  targetEmail,
+        reported_username:    targetUsername,
+        content_url:          `https://pineapple-moments.vercel.app/album/${albumId}`,
+        incident_datetime:    report.created_at,
+        reporter_username:    report.reporter_username || 'admin',
+        reason:               report.reason,
+        page_ids:             [],
+      })
+    })
+
+    const data = await res.json()
+
+    if (data.status === 'success') {
+      toast(`✅ Relatório enviado ao NCMEC! Protocolo: ${data.tip_id}`, 'success')
+      // Registra log da ação
+      await supabase.from('technical_logs').insert({
+        user_id: user.id, event_type: 'ncmec_report',
+        details: { tip_id: data.tip_id, report_id: report.id, target: albumId }
+      })
+    } else if (data.status === 'simulation') {
+      toast('⚠️ NCMEC em modo simulação — configure as credenciais após aprovação', 'success')
+    } else {
+      toast('Erro ao enviar para o NCMEC: ' + data.message, 'error')
+    }
+  }
+
   const filteredReports = reports.filter(r => reportFilter === 'all' ? true : r.status === reportFilter)
   const b = (bg, color, border) => ({ padding: '6px 12px', background: bg, color, border: border||'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' })
   const card = (color) => ({ background: 'white', borderRadius: 12, padding: '14px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: `4px solid ${color}` })
@@ -503,6 +620,7 @@ ${report.description ? `<div class="row"><span class="lbl">Descrição do Denunc
             ['violations','⚠️ Violações'],
             ['retention','📅 Retenção'],
             ['logs','📋 Logs'],
+            ['archived','🗂️ Relatórios'],
             ['staff','🔑 Equipe'],
           ].map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)}
@@ -864,6 +982,83 @@ ${report.description ? `<div class="row"><span class="lbl">Descrição do Denunc
           </div>
         )}
       </div>
+
+      {/* ── RELATÓRIOS ARQUIVADOS ── */}
+      {tab === 'archived' && (
+        <div>
+          <div style={{ background:'#fff8e1', border:'2px solid #ffe082', borderRadius:12, padding:'12px 16px', marginBottom:16, fontSize:13, color:'#856404', lineHeight:1.6 }}>
+            🗂️ <strong>Retenção legal de 6 meses</strong> — Relatórios gerados são arquivados automaticamente conforme o Art. 15 do Marco Civil da Internet (Lei 12.965/2014). Dados de identificação dos usuários são mantidos por 6 meses após a geração do relatório.
+          </div>
+
+          {isAdmin && (
+            <div style={{ marginBottom: 12 }}>
+              <button onClick={async () => {
+                const { data } = await supabase.rpc('cleanup_archived_reports')
+                toast(`✅ ${data?.deleted||0} relatório(s) expirado(s) removido(s)`, 'success')
+                loadData()
+              }} style={{ ...b('#f5f5f5','#555','1px solid #e0e0e0'), borderRadius: 50, padding: '8px 16px' }}>
+                🧹 Limpar relatórios expirados
+              </button>
+            </div>
+          )}
+
+          <div style={{ background:'white', borderRadius:14, overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
+            <div style={{ padding:'12px 16px', borderBottom:'1px solid #f0f0f0', fontWeight:800, fontSize:13 }}>
+              🗂️ Relatórios Arquivados ({archivedReports.length}) — expiram em 6 meses
+            </div>
+            {archivedReports.length === 0
+              ? <div style={{ padding:32, textAlign:'center', color:'#888', fontSize:13 }}>Nenhum relatório arquivado — relatórios são salvos automaticamente ao clicar em 🏛️ Gerar Relatório</div>
+              : <div style={{ overflowX:'auto' }}>
+                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                    <thead><tr style={{ background:'#f5f5f5' }}>
+                      {['Protocolo','Tipo','Usuário Denunciado','Email','Motivo','Gerado em','Expira em','Ação'].map(h => (
+                        <th key={h} style={{ padding:'10px 14px', textAlign:'left', fontWeight:700, color:'#555', whiteSpace:'nowrap' }}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {archivedReports.map((r,i) => {
+                        const expired = new Date(r.expires_at) < new Date()
+                        const daysLeft = Math.max(0, Math.ceil((new Date(r.expires_at) - new Date()) / 86400000))
+                        return (
+                          <tr key={r.id} style={{ borderTop:'1px solid #f0f0f0', background: expired?'#fff5f5':i%2===0?'white':'#fafafa' }}>
+                            <td style={{ padding:'10px 14px', fontWeight:700, fontFamily:'monospace', fontSize:11, color:'#1B3A1F' }}>{r.protocol}</td>
+                            <td style={{ padding:'10px 14px' }}>
+                              <span style={{ background:'#e3f2fd', color:'#1565c0', padding:'2px 6px', borderRadius:99, fontSize:10, fontWeight:700 }}>
+                                {r.target_type==='album'?'📷 Álbum':'👤 Usuário'}
+                              </span>
+                            </td>
+                            <td style={{ padding:'10px 14px' }}>
+                              <div style={{ fontWeight:700 }}>{r.target_display_name||'—'}</div>
+                              <div style={{ color:'#888', fontSize:10 }}>@{r.target_username||'—'}</div>
+                            </td>
+                            <td style={{ padding:'10px 14px', color:'#555', fontSize:11 }}>{r.target_email||'—'}</td>
+                            <td style={{ padding:'10px 14px', color:'#555', maxWidth:140, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.reason||'—'}</td>
+                            <td style={{ padding:'10px 14px', color:'#888', fontSize:11, whiteSpace:'nowrap' }}>{fmt(r.created_at)}</td>
+                            <td style={{ padding:'10px 14px', whiteSpace:'nowrap' }}>
+                              {expired
+                                ? <span style={{ color:'#c62828', fontWeight:700, fontSize:11 }}>⚠️ Expirado</span>
+                                : <span style={{ color:'#2e7d32', fontWeight:700, fontSize:11 }}>✅ {daysLeft}d restantes</span>
+                              }
+                            </td>
+                            <td style={{ padding:'10px 14px' }}>
+                              {isAdmin && (
+                                <button onClick={async () => {
+                                  if (!confirm('Excluir este relatório arquivado?')) return
+                                  await supabase.from('archived_reports').delete().eq('id', r.id)
+                                  loadData()
+                                }} style={b('#fdecea','#c62828')}>🗑️</button>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+            }
+          </div>
+        </div>
+      )}
 
       {/* Modal Banimento Permanente */}
       {showBanModal && selectedUser && (
