@@ -695,149 +695,110 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
         {/* Elementos */}
         {elements.map(el => {
           const isSel = selected === el.id
-          const w = el.width  || (el.type==='sticker' ? 60  : 200)
-          const h = el.height || (el.type==='photo'   ? 180 : el.type==='sticker' ? 60 : 80)
+          const w = el.width  || (el.type==='sticker' ? 60 : el.type==='postit' ? 170 : 200)
+          const h = el.height || (el.type==='photo' ? 180 : el.type==='sticker' ? 60 : el.type==='postit' ? 170 : 80)
+          const isEditingThis = editingPostit === el.id && isOwner && !isDrawMode
 
           return (
             <div key={el.id} data-elid={el.id}
-              style={{ position:'absolute', left:el.x, top:el.y, width:w, height:h, cursor: isDrawMode ? 'crosshair' : (isOwner?'grab':'default'), userSelect:'none', zIndex:isSel?20:1, overflow: (el.type==='text' || el.type==='postit') ? 'visible' : 'hidden' }}
-              onMouseDown={e => startMove(e, el.id)}
-              onTouchStart={e => startMove(e, el.id)}
+              style={{
+                position:'absolute', left:el.x, top:el.y, width:w, height:h,
+                cursor: isDrawMode ? 'crosshair' : (isOwner ? 'grab' : 'default'),
+                userSelect:'none', zIndex: isSel ? 20 : 1,
+                overflow: (el.type==='text') ? 'visible' : 'hidden',
+                transform: el.type==='postit' ? `rotate(${el.rotation||0}deg)` : undefined,
+              }}
+              onMouseDown={e => { if (el.type !== 'postit' || !isEditingThis) startMove(e, el.id) }}
+              onTouchStart={e => { if (el.type !== 'postit' || !isEditingThis) startMove(e, el.id) }}
               onClick={e => { e.stopPropagation(); if (isOwner && !isDrawMode) setSelected(el.id) }}>
 
+              {/* TEXT */}
               {el.type === 'text' && (
                 <div style={{ fontFamily:el.font||'Caveat', fontSize:el.fontSize||28, color:el.color||'#1B3A1F', width:w, wordBreak:'break-word', whiteSpace:'pre-wrap', lineHeight:1.45, minHeight:30 }}>
                   {el.text}
                 </div>
               )}
+
+              {/* STICKER */}
               {el.type === 'sticker' && (
                 <div style={{ fontSize:el.fontSize||52, lineHeight:1, width:w, height:h, display:'flex', alignItems:'center', justifyContent:'center' }}>{el.emoji}</div>
               )}
-              {el.type === 'postit' && (
-                <div
-                  style={{ width:w, height:h, background:el.bg||'#FFF176', border:`2px solid ${el.border||'#F9A825'}`, borderRadius:4, boxShadow:`3px 4px 10px ${el.shadow||'rgba(0,0,0,0.2)'}`, transform:`rotate(${el.rotation||0}deg)`, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative' }}
-                  onDoubleClick={e => { e.stopPropagation(); if (isOwner && !isDrawMode) setEditingPostit(el.id) }}>
-                  {/* Dobra no canto */}
-                  <div style={{ position:'absolute', top:0, right:0, width:0, height:0, borderStyle:'solid', borderWidth:`0 16px 16px 0`, borderColor:`transparent ${el.border||'#F9A825'} transparent transparent`, opacity:0.4 }}/>
-                  {/* Linha decorativa no topo */}
-                  <div style={{ height:4, background:`${el.border||'#F9A825'}`, opacity:0.3, flexShrink:0 }}/>
-                  {editingPostit === el.id && isOwner
-                    ? <textarea
-                        autoFocus
-                        value={el.text||''}
-                        onChange={async e => {
-                          const newText = e.target.value
-                          setElements(els => els.map(item => item.id === el.id ? {...item, text: newText} : item))
-                        }}
-                        onBlur={async e => {
-                          const finalText = e.target.value.trim()
-                          // Moderação do texto
-                          if (finalText.length > 2) {
-                            const { moderateText } = await import('../lib/moderation.js')
-                            const result = await moderateText(finalText, userId)
-                            if (result.blocked) {
-                              toast(`Texto bloqueado: ${result.label} ⚠️`, 'error')
-                              setElements(els => els.map(item => item.id === el.id ? {...item, text: ''} : item))
-                              setEditingPostit(null)
-                              return
-                            }
-                          }
-                          setEditingPostit(null)
-                        }}
-                        style={{ flex:1, background:'transparent', border:'none', outline:'none', resize:'none', padding:'8px 10px', fontFamily:el.fontFamily||'Caveat', fontSize:el.fontSize||16, color:'#333', lineHeight:1.5 }}
-                        placeholder="Escreva aqui... ✏️"
-                      />
-                    : <div style={{ flex:1, padding:'8px 10px', fontFamily:el.fontFamily||'Caveat', fontSize:el.fontSize||16, color:'#333', lineHeight:1.5, wordBreak:'break-word', whiteSpace:'pre-wrap', overflowY:'auto' }}>
-                        {el.text || (isOwner ? <span style={{color:'#aaa',fontStyle:'italic',fontSize:13}}>Duplo clique para editar ✏️</span> : '')}
-                      </div>
-                  }
-                </div>
-              )}
 
-              {el.type === 'postit' && (() => {
-                const isEditing = editingPostit === el.id && isOwner && !isDrawMode
-                return (
-                  <div
-                    style={{
-                      width: w, height: h,
-                      background: el.bg || '#FFF59D',
-                      borderTop: `6px solid ${el.lineColor || '#F9A825'}`,
-                      borderLeft: `1px solid ${el.lineColor || '#F9A825'}40`,
-                      borderRight: `1px solid ${el.lineColor || '#F9A825'}40`,
-                      borderBottom: `1px solid ${el.lineColor || '#F9A825'}40`,
-                      borderRadius: '2px 2px 4px 4px',
-                      boxShadow: `3px 5px 12px ${el.lineColor || '#F9A825'}50, inset 0 0 0 1px ${el.lineColor || '#F9A825'}20`,
-                      transform: `rotate(${el.rotation || 0}deg)`,
-                      display: 'flex', flexDirection: 'column',
-                      overflow: 'hidden', position: 'relative',
-                      cursor: isDrawMode ? 'crosshair' : (isOwner ? (isEditing ? 'text' : 'grab') : 'default'),
-                    }}
-                    onDoubleClick={e => {
-                      e.stopPropagation()
-                      if (isOwner && !isDrawMode) {
-                        setSelected(el.id)
-                        setEditingPostit(el.id)
-                      }
-                    }}>
-                    {/* Linhas decorativas de caderno */}
-                    {Array.from({length: Math.floor(h/24)}).map((_, li) => (
-                      <div key={li} style={{ position:'absolute', left:10, right:10, top: 28 + li*24, height:1, background:`${el.lineColor||'#F9A825'}25`, pointerEvents:'none' }}/>
-                    ))}
-                    {/* Furos de caderno */}
-                    <div style={{ position:'absolute', left:14, top:'35%', width:8, height:8, borderRadius:'50%', background:`${el.lineColor||'#F9A825'}40`, pointerEvents:'none' }}/>
-                    {/* Texto ou textarea */}
-                    {isEditing
-                      ? <textarea
-                          autoFocus
-                          value={el.text || ''}
-                          onChange={e => {
-                            const v = e.target.value
-                            setElements(els => els.map(it => it.id === el.id ? {...it, text: v} : it))
-                          }}
-                          onBlur={async e => {
-                            const txt = e.target.value.trim()
-                            if (txt.length > 2) {
-                              const { moderateText } = await import('../lib/moderation.js')
-                              const r = await moderateText(txt, userId)
-                              if (r.blocked) {
-                                toast(`Texto bloqueado: ${r.label} ⚠️`, 'error')
-                                setElements(els => els.map(it => it.id === el.id ? {...it, text: ''} : it))
-                              }
-                            }
-                            setEditingPostit(null)
-                          }}
-                          onMouseDown={e => e.stopPropagation()}
-                          onTouchStart={e => e.stopPropagation()}
-                          style={{
-                            flex:1, background:'transparent', border:'none', outline:'none',
-                            resize:'none', padding:'8px 10px 8px 28px',
-                            fontFamily: el.fontFamily||'Caveat', fontSize: el.fontSize||17,
-                            color: el.textColor||'#5D4037', lineHeight:1.55,
-                            zIndex:100,
-                          }}
-                          placeholder="Escreva aqui... ✏️"
-                        />
-                      : <div style={{
-                            flex:1, padding:'8px 10px 8px 28px',
-                            fontFamily: el.fontFamily||'Caveat', fontSize: el.fontSize||17,
-                            color: el.textColor||'#5D4037', lineHeight:1.55,
-                            wordBreak:'break-word', whiteSpace:'pre-wrap', overflowY:'hidden',
-                          }}>
-                          {el.text || (isOwner
-                            ? <span style={{color:`${el.lineColor||'#F9A825'}80`, fontStyle:'italic', fontSize:13}}>Duplo clique para editar ✏️</span>
-                            : null)}
-                        </div>
-                    }
-                  </div>
-                )
-              })()}
-
+              {/* PHOTO */}
               {el.type === 'photo' && (
                 <img src={el.url} alt="" draggable={false}
                   style={{ width:w, height:h, borderRadius:el.radius||8, objectFit:'cover', transform:`rotate(${el.rotation||0}deg)`, display:'block', pointerEvents:'none' }}/>
               )}
 
-              {/* Handles */}
+              {/* POST-IT */}
+              {el.type === 'postit' && (
+                <div style={{
+                  width:w, height:h, position:'relative', overflow:'hidden',
+                  background: el.bg || '#FFF59D',
+                  borderTop: `6px solid ${el.lineColor||'#F9A825'}`,
+                  border: `1px solid ${el.lineColor||'#F9A825'}40`,
+                  borderRadius: '2px 2px 6px 6px',
+                  boxShadow: `3px 5px 14px ${el.lineColor||'#F9A825'}55`,
+                  display:'flex', flexDirection:'column',
+                }}>
+                  {/* Linhas horizontais decorativas */}
+                  {[1,2,3,4,5,6,7].map(i => (
+                    <div key={i} style={{ position:'absolute', left:20, right:8, top: 22 + i*22, height:1, background:`${el.lineColor||'#F9A825'}30`, pointerEvents:'none' }}/>
+                  ))}
+                  {/* Furo de caderno */}
+                  <div style={{ position:'absolute', left:10, top:'42%', width:7, height:7, borderRadius:'50%', background:`${el.lineColor||'#F9A825'}50`, pointerEvents:'none' }}/>
+                  {isEditingThis
+                    ? <textarea
+                        autoFocus
+                        value={el.text||''}
+                        onChange={e => {
+                          const v = e.target.value
+                          setElements(els => els.map(it => it.id === el.id ? {...it, text:v} : it))
+                          mark()
+                        }}
+                        onBlur={async e => {
+                          const txt = e.target.value.trim()
+                          if (txt.length > 2) {
+                            const { moderateText: mod } = await import('../lib/moderation.js')
+                            const r = await mod(txt, userId)
+                            if (r.blocked) {
+                              toast(`Texto bloqueado: ${r.label} ⚠️`, 'error')
+                              setElements(els => els.map(it => it.id === el.id ? {...it, text:''} : it))
+                            }
+                          }
+                          setEditingPostit(null)
+                        }}
+                        onMouseDown={e => e.stopPropagation()}
+                        onTouchStart={e => e.stopPropagation()}
+                        style={{
+                          flex:1, background:'transparent', border:'none', outline:'none',
+                          resize:'none', padding:'8px 8px 8px 22px',
+                          fontFamily: el.fontFamily||'Caveat', fontSize: el.fontSize||17,
+                          color: el.textColor||'#5D4037', lineHeight:1.5, zIndex:5,
+                        }}
+                        placeholder="Escreva aqui ✏️"
+                      />
+                    : <div
+                        style={{
+                          flex:1, padding:'8px 8px 8px 22px',
+                          fontFamily: el.fontFamily||'Caveat', fontSize: el.fontSize||17,
+                          color: el.textColor||'#5D4037', lineHeight:1.5,
+                          wordBreak:'break-word', whiteSpace:'pre-wrap', overflowY:'hidden',
+                          cursor: isOwner && !isDrawMode ? 'pointer' : 'default',
+                        }}
+                        onDoubleClick={e => {
+                          e.stopPropagation()
+                          if (isOwner && !isDrawMode) { setSelected(el.id); setEditingPostit(el.id) }
+                        }}>
+                        {el.text || (isOwner
+                          ? <span style={{color:`${el.lineColor||'#F9A825'}99`, fontStyle:'italic', fontSize:13}}>Duplo clique para editar ✏️</span>
+                          : null)}
+                      </div>
+                  }
+                </div>
+              )}
+
+              {/* HANDLES de seleção */}
               {isSel && isOwner && !isDrawMode && (<>
                 <div style={{ position:'absolute', inset:-4, border:'2px solid #6B4DE6', borderRadius:4, pointerEvents:'none', zIndex:10 }}/>
                 {HANDLES.map(h => (
@@ -846,127 +807,9 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
                     onTouchStart={e => startResize(e, el.id, h.id)}
                     style={{ position:'absolute', top:h.top, left:h.left, transform:'translate(-50%,-50%)', width:20, height:20, background:'white', border:'2px solid #6B4DE6', borderRadius:4, cursor:h.cursor, zIndex:30, touchAction:'none' }}/>
                 ))}
-                {el.type === 'postit' && (
-                <div
-                  style={{ width:w, height:h, background:el.bg||'#FFF176', border:`2px solid ${el.border||'#F9A825'}`, borderRadius:4, boxShadow:`3px 4px 10px ${el.shadow||'rgba(0,0,0,0.2)'}`, transform:`rotate(${el.rotation||0}deg)`, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative' }}
-                  onDoubleClick={e => { e.stopPropagation(); if (isOwner && !isDrawMode) setEditingPostit(el.id) }}>
-                  {/* Dobra no canto */}
-                  <div style={{ position:'absolute', top:0, right:0, width:0, height:0, borderStyle:'solid', borderWidth:`0 16px 16px 0`, borderColor:`transparent ${el.border||'#F9A825'} transparent transparent`, opacity:0.4 }}/>
-                  {/* Linha decorativa no topo */}
-                  <div style={{ height:4, background:`${el.border||'#F9A825'}`, opacity:0.3, flexShrink:0 }}/>
-                  {editingPostit === el.id && isOwner
-                    ? <textarea
-                        autoFocus
-                        value={el.text||''}
-                        onChange={async e => {
-                          const newText = e.target.value
-                          setElements(els => els.map(item => item.id === el.id ? {...item, text: newText} : item))
-                        }}
-                        onBlur={async e => {
-                          const finalText = e.target.value.trim()
-                          // Moderação do texto
-                          if (finalText.length > 2) {
-                            const { moderateText } = await import('../lib/moderation.js')
-                            const result = await moderateText(finalText, userId)
-                            if (result.blocked) {
-                              toast(`Texto bloqueado: ${result.label} ⚠️`, 'error')
-                              setElements(els => els.map(item => item.id === el.id ? {...item, text: ''} : item))
-                              setEditingPostit(null)
-                              return
-                            }
-                          }
-                          setEditingPostit(null)
-                        }}
-                        style={{ flex:1, background:'transparent', border:'none', outline:'none', resize:'none', padding:'8px 10px', fontFamily:el.fontFamily||'Caveat', fontSize:el.fontSize||16, color:'#333', lineHeight:1.5 }}
-                        placeholder="Escreva aqui... ✏️"
-                      />
-                    : <div style={{ flex:1, padding:'8px 10px', fontFamily:el.fontFamily||'Caveat', fontSize:el.fontSize||16, color:'#333', lineHeight:1.5, wordBreak:'break-word', whiteSpace:'pre-wrap', overflowY:'auto' }}>
-                        {el.text || (isOwner ? <span style={{color:'#aaa',fontStyle:'italic',fontSize:13}}>Duplo clique para editar ✏️</span> : '')}
-                      </div>
-                  }
-                </div>
-              )}
-
-              {el.type === 'postit' && (() => {
-                const isEditing = editingPostit === el.id && isOwner && !isDrawMode
-                return (
-                  <div
-                    style={{
-                      width: w, height: h,
-                      background: el.bg || '#FFF59D',
-                      borderTop: `6px solid ${el.lineColor || '#F9A825'}`,
-                      borderLeft: `1px solid ${el.lineColor || '#F9A825'}40`,
-                      borderRight: `1px solid ${el.lineColor || '#F9A825'}40`,
-                      borderBottom: `1px solid ${el.lineColor || '#F9A825'}40`,
-                      borderRadius: '2px 2px 4px 4px',
-                      boxShadow: `3px 5px 12px ${el.lineColor || '#F9A825'}50, inset 0 0 0 1px ${el.lineColor || '#F9A825'}20`,
-                      transform: `rotate(${el.rotation || 0}deg)`,
-                      display: 'flex', flexDirection: 'column',
-                      overflow: 'hidden', position: 'relative',
-                      cursor: isDrawMode ? 'crosshair' : (isOwner ? (isEditing ? 'text' : 'grab') : 'default'),
-                    }}
-                    onDoubleClick={e => {
-                      e.stopPropagation()
-                      if (isOwner && !isDrawMode) {
-                        setSelected(el.id)
-                        setEditingPostit(el.id)
-                      }
-                    }}>
-                    {/* Linhas decorativas de caderno */}
-                    {Array.from({length: Math.floor(h/24)}).map((_, li) => (
-                      <div key={li} style={{ position:'absolute', left:10, right:10, top: 28 + li*24, height:1, background:`${el.lineColor||'#F9A825'}25`, pointerEvents:'none' }}/>
-                    ))}
-                    {/* Furos de caderno */}
-                    <div style={{ position:'absolute', left:14, top:'35%', width:8, height:8, borderRadius:'50%', background:`${el.lineColor||'#F9A825'}40`, pointerEvents:'none' }}/>
-                    {/* Texto ou textarea */}
-                    {isEditing
-                      ? <textarea
-                          autoFocus
-                          value={el.text || ''}
-                          onChange={e => {
-                            const v = e.target.value
-                            setElements(els => els.map(it => it.id === el.id ? {...it, text: v} : it))
-                          }}
-                          onBlur={async e => {
-                            const txt = e.target.value.trim()
-                            if (txt.length > 2) {
-                              const { moderateText } = await import('../lib/moderation.js')
-                              const r = await moderateText(txt, userId)
-                              if (r.blocked) {
-                                toast(`Texto bloqueado: ${r.label} ⚠️`, 'error')
-                                setElements(els => els.map(it => it.id === el.id ? {...it, text: ''} : it))
-                              }
-                            }
-                            setEditingPostit(null)
-                          }}
-                          onMouseDown={e => e.stopPropagation()}
-                          onTouchStart={e => e.stopPropagation()}
-                          style={{
-                            flex:1, background:'transparent', border:'none', outline:'none',
-                            resize:'none', padding:'8px 10px 8px 28px',
-                            fontFamily: el.fontFamily||'Caveat', fontSize: el.fontSize||17,
-                            color: el.textColor||'#5D4037', lineHeight:1.55,
-                            zIndex:100,
-                          }}
-                          placeholder="Escreva aqui... ✏️"
-                        />
-                      : <div style={{
-                            flex:1, padding:'8px 10px 8px 28px',
-                            fontFamily: el.fontFamily||'Caveat', fontSize: el.fontSize||17,
-                            color: el.textColor||'#5D4037', lineHeight:1.55,
-                            wordBreak:'break-word', whiteSpace:'pre-wrap', overflowY:'hidden',
-                          }}>
-                          {el.text || (isOwner
-                            ? <span style={{color:`${el.lineColor||'#F9A825'}80`, fontStyle:'italic', fontSize:13}}>Duplo clique para editar ✏️</span>
-                            : null)}
-                        </div>
-                    }
-                  </div>
-                )
-              })()}
-
-              {el.type === 'photo' && (
-                  <div onMouseDown={e => startRotate(e, el)}
+                {(el.type === 'photo' || el.type === 'postit') && (
+                  <div onMouseDown={e => el.type === 'photo' ? startRotate(e, el) : upd(el.id, {rotation: ((el.rotation||0) + 5) % 360})}
+                    onTouchStart={e => el.type === 'photo' ? startRotate(e, el) : upd(el.id, {rotation: ((el.rotation||0) + 5) % 360})}
                     style={{ position:'absolute', left:'50%', bottom:-30, transform:'translateX(-50%)', width:22, height:22, background:'white', border:'2px solid #6B4DE6', borderRadius:'50%', cursor:'grab', zIndex:30, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, userSelect:'none' }}>↻</div>
                 )}
               </>)}
