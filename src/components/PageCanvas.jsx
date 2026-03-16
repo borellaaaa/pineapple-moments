@@ -49,6 +49,16 @@ const DRAW_TOOLS = [
 
 const DRAW_COLORS = ['#1B3A1F','#e53935','#F5C800','#3A8C3F','#FF6B9D','#667EEA','#FF6D00','#00ACC1','#9C27B0','#ffffff']
 
+const POSTIT_COLORS = [
+  { id:'yellow',  bg:'#FFF176', border:'#F9A825', shadow:'rgba(249,168,37,0.3)',  label:'Amarelo' },
+  { id:'pink',    bg:'#F8BBD0', border:'#E91E8C', shadow:'rgba(233,30,140,0.25)', label:'Rosa'    },
+  { id:'blue',    bg:'#B3E5FC', border:'#0288D1', shadow:'rgba(2,136,209,0.25)',  label:'Azul'    },
+  { id:'green',   bg:'#C8E6C9', border:'#388E3C', shadow:'rgba(56,142,60,0.25)',  label:'Verde'   },
+  { id:'purple',  bg:'#E1BEE7', border:'#7B1FA2', shadow:'rgba(123,31,162,0.25)', label:'Roxo'    },
+  { id:'orange',  bg:'#FFE0B2', border:'#EF6C00', shadow:'rgba(239,108,0,0.25)',  label:'Laranja' },
+  { id:'white',   bg:'#FAFAFA', border:'#9E9E9E', shadow:'rgba(0,0,0,0.15)',      label:'Branco'  },
+]
+
 const HANDLES = [
   { id:'nw', cursor:'nw-resize', top:'0%',   left:'0%'   },
   { id:'n',  cursor:'n-resize',  top:'0%',   left:'50%'  },
@@ -95,6 +105,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
   const drawPath   = useRef(null)   // path SVG atual sendo desenhado
   const drawPoints = useRef([])     // pontos do stroke atual
   const [svgPaths, setSvgPaths] = useState(page.svg_paths || [])
+  const [editingPostit, setEditingPostit] = useState(null)  // id do postit sendo editado
   const svgPathsRef = useRef(svgPaths)
 
   useEffect(() => { elemRef.current    = elements  }, [elements])
@@ -366,6 +377,21 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
     setPanel('none')
   }
 
+  const addPostit = (colorId = 'yellow') => {
+    const color = POSTIT_COLORS.find(c => c.id === colorId) || POSTIT_COLORS[0]
+    add({
+      id: uuidv4(), type: 'postit',
+      x: 60 + Math.random()*100, y: 60 + Math.random()*100,
+      width: 180, height: 180,
+      text: '',
+      colorId: color.id,
+      bg: color.bg, border: color.border, shadow: color.shadow,
+      fontSize: 16, fontFamily: 'Caveat',
+      rotation: (Math.random() - 0.5) * 8,
+    })
+    setPanel('none')
+  }
+
   const handleUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -423,6 +449,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
               {uploading ? <span className="loader loader-sm" style={{margin:0}}/> : '📷'}
             </button>
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{display:'none'}} onChange={handleUpload}/>
+            <button style={toolBtn(panel==='postit')} onClick={() => setPanel(p => p==='postit'?'none':'postit')} title="Post-it">📝</button>
           </div>
 
           <div style={{width:1,height:28,background:'var(--dark-faint)',flexShrink:0}}/>
@@ -522,6 +549,21 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
           <p style={{ fontSize:11, color:'var(--dark-muted)', marginTop:8, fontFamily:'var(--font-cute)' }}>
             💡 Clique e arraste para desenhar • <strong>{toolDef.label}</strong> — ponta: <strong>{tool.lineWidth}px</strong>
           </p>
+        </div>
+      )}
+
+      {/* ── Post-it Panel ── */}
+      {panel === 'postit' && isOwner && (
+        <div style={{ background:'white', borderRadius:14, padding:14, boxShadow:'var(--shadow-md)', display:'flex', gap:10, flexWrap:'wrap', justifyContent:'center', width:'100%', maxWidth:595, animation:'slideDown 0.2s ease' }}>
+          <p style={{ width:'100%', textAlign:'center', fontSize:12, color:'var(--dark-muted)', fontWeight:700, marginBottom:4 }}>📝 Escolha a cor do post-it</p>
+          {POSTIT_COLORS.map(c => (
+            <button key={c.id} onClick={() => addPostit(c.id)} title={c.label}
+              style={{ width:44, height:44, background:c.bg, border:`2px solid ${c.border}`, borderRadius:8, cursor:'pointer', boxShadow:`0 3px 8px ${c.shadow}`, transition:'transform 0.15s', transform:'rotate(-2deg)', position:'relative' }}
+              onMouseOver={e => e.currentTarget.style.transform='scale(1.15) rotate(-2deg)'}
+              onMouseOut={e => e.currentTarget.style.transform='rotate(-2deg)'}>
+              <span style={{ position:'absolute', bottom:2, right:3, fontSize:9, color:c.border, fontWeight:700, opacity:0.7 }}>{c.label.slice(0,3)}</span>
+            </button>
+          ))}
         </div>
       )}
 
@@ -640,6 +682,47 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
               {el.type === 'sticker' && (
                 <div style={{ fontSize:el.fontSize||52, lineHeight:1, width:w, height:h, display:'flex', alignItems:'center', justifyContent:'center' }}>{el.emoji}</div>
               )}
+              {el.type === 'postit' && (
+                <div
+                  style={{ width:w, height:h, background:el.bg||'#FFF176', border:`2px solid ${el.border||'#F9A825'}`, borderRadius:4, boxShadow:`3px 4px 10px ${el.shadow||'rgba(0,0,0,0.2)'}`, transform:`rotate(${el.rotation||0}deg)`, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative' }}
+                  onDoubleClick={e => { e.stopPropagation(); if (isOwner && !isDrawMode) setEditingPostit(el.id) }}>
+                  {/* Dobra no canto */}
+                  <div style={{ position:'absolute', top:0, right:0, width:0, height:0, borderStyle:'solid', borderWidth:`0 16px 16px 0`, borderColor:`transparent ${el.border||'#F9A825'} transparent transparent`, opacity:0.4 }}/>
+                  {/* Linha decorativa no topo */}
+                  <div style={{ height:4, background:`${el.border||'#F9A825'}`, opacity:0.3, flexShrink:0 }}/>
+                  {editingPostit === el.id && isOwner
+                    ? <textarea
+                        autoFocus
+                        value={el.text||''}
+                        onChange={async e => {
+                          const newText = e.target.value
+                          setElements(els => els.map(item => item.id === el.id ? {...item, text: newText} : item))
+                        }}
+                        onBlur={async e => {
+                          const finalText = e.target.value.trim()
+                          // Moderação do texto
+                          if (finalText.length > 2) {
+                            const { moderateText } = await import('../lib/moderation.js')
+                            const result = await moderateText(finalText, userId)
+                            if (result.blocked) {
+                              toast(`Texto bloqueado: ${result.label} ⚠️`, 'error')
+                              setElements(els => els.map(item => item.id === el.id ? {...item, text: ''} : item))
+                              setEditingPostit(null)
+                              return
+                            }
+                          }
+                          setEditingPostit(null)
+                        }}
+                        style={{ flex:1, background:'transparent', border:'none', outline:'none', resize:'none', padding:'8px 10px', fontFamily:el.fontFamily||'Caveat', fontSize:el.fontSize||16, color:'#333', lineHeight:1.5 }}
+                        placeholder="Escreva aqui... ✏️"
+                      />
+                    : <div style={{ flex:1, padding:'8px 10px', fontFamily:el.fontFamily||'Caveat', fontSize:el.fontSize||16, color:'#333', lineHeight:1.5, wordBreak:'break-word', whiteSpace:'pre-wrap', overflowY:'auto' }}>
+                        {el.text || (isOwner ? <span style={{color:'#aaa',fontStyle:'italic',fontSize:13}}>Duplo clique para editar ✏️</span> : '')}
+                      </div>
+                  }
+                </div>
+              )}
+
               {el.type === 'photo' && (
                 <img src={el.url} alt="" draggable={false}
                   style={{ width:w, height:h, borderRadius:el.radius||8, objectFit:'cover', transform:`rotate(${el.rotation||0}deg)`, display:'block', pointerEvents:'none' }}/>
@@ -654,7 +737,48 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
                     onTouchStart={e => startResize(e, el.id, h.id)}
                     style={{ position:'absolute', top:h.top, left:h.left, transform:'translate(-50%,-50%)', width:20, height:20, background:'white', border:'2px solid #6B4DE6', borderRadius:4, cursor:h.cursor, zIndex:30, touchAction:'none' }}/>
                 ))}
-                {el.type === 'photo' && (
+                {el.type === 'postit' && (
+                <div
+                  style={{ width:w, height:h, background:el.bg||'#FFF176', border:`2px solid ${el.border||'#F9A825'}`, borderRadius:4, boxShadow:`3px 4px 10px ${el.shadow||'rgba(0,0,0,0.2)'}`, transform:`rotate(${el.rotation||0}deg)`, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative' }}
+                  onDoubleClick={e => { e.stopPropagation(); if (isOwner && !isDrawMode) setEditingPostit(el.id) }}>
+                  {/* Dobra no canto */}
+                  <div style={{ position:'absolute', top:0, right:0, width:0, height:0, borderStyle:'solid', borderWidth:`0 16px 16px 0`, borderColor:`transparent ${el.border||'#F9A825'} transparent transparent`, opacity:0.4 }}/>
+                  {/* Linha decorativa no topo */}
+                  <div style={{ height:4, background:`${el.border||'#F9A825'}`, opacity:0.3, flexShrink:0 }}/>
+                  {editingPostit === el.id && isOwner
+                    ? <textarea
+                        autoFocus
+                        value={el.text||''}
+                        onChange={async e => {
+                          const newText = e.target.value
+                          setElements(els => els.map(item => item.id === el.id ? {...item, text: newText} : item))
+                        }}
+                        onBlur={async e => {
+                          const finalText = e.target.value.trim()
+                          // Moderação do texto
+                          if (finalText.length > 2) {
+                            const { moderateText } = await import('../lib/moderation.js')
+                            const result = await moderateText(finalText, userId)
+                            if (result.blocked) {
+                              toast(`Texto bloqueado: ${result.label} ⚠️`, 'error')
+                              setElements(els => els.map(item => item.id === el.id ? {...item, text: ''} : item))
+                              setEditingPostit(null)
+                              return
+                            }
+                          }
+                          setEditingPostit(null)
+                        }}
+                        style={{ flex:1, background:'transparent', border:'none', outline:'none', resize:'none', padding:'8px 10px', fontFamily:el.fontFamily||'Caveat', fontSize:el.fontSize||16, color:'#333', lineHeight:1.5 }}
+                        placeholder="Escreva aqui... ✏️"
+                      />
+                    : <div style={{ flex:1, padding:'8px 10px', fontFamily:el.fontFamily||'Caveat', fontSize:el.fontSize||16, color:'#333', lineHeight:1.5, wordBreak:'break-word', whiteSpace:'pre-wrap', overflowY:'auto' }}>
+                        {el.text || (isOwner ? <span style={{color:'#aaa',fontStyle:'italic',fontSize:13}}>Duplo clique para editar ✏️</span> : '')}
+                      </div>
+                  }
+                </div>
+              )}
+
+              {el.type === 'photo' && (
                   <div onMouseDown={e => startRotate(e, el)}
                     style={{ position:'absolute', left:'50%', bottom:-30, transform:'translateX(-50%)', width:22, height:22, background:'white', border:'2px solid #6B4DE6', borderRadius:'50%', cursor:'grab', zIndex:30, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, userSelect:'none' }}>↻</div>
                 )}
