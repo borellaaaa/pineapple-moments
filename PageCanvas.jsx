@@ -119,7 +119,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
     if (!dirty.current) return
     const t = setTimeout(async () => {
       // Verifica todos os elementos de texto antes de salvar
-      const textElements = elemRef.current.filter(e => e.type === 'text' && e.text?.trim().length > 2)
+      const textElements = elemRef.current.filter(e => (e.type === 'text' || e.type === 'postit') && e.text?.trim().length > 2)
       for (const el of textElements) {
         const mod = await moderateText(el.text, userId)
         if (mod.blocked) {
@@ -560,20 +560,21 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
 
       {/* ── Post-it Panel ── */}
       {panel === 'postit' && isOwner && (
-        <div style={{ background:'white', borderRadius:14, padding:14, boxShadow:'var(--shadow-md)', display:'flex', gap:10, flexWrap:'wrap', justifyContent:'center', width:'100%', maxWidth:595, animation:'slideDown 0.2s ease' }}>
-          <p style={{ width:'100%', textAlign:'center', fontSize:12, color:'var(--dark-muted)', fontWeight:700, marginBottom:4 }}>📝 Escolha a cor do post-it</p>
-          {POSTIT_COLORS.map(c => (
-            <button key={c.id} onClick={() => addPostit(c.id)} title={c.label}
-              style={{ width:44, height:44, background:c.bg, border:`2px solid ${c.border}`, borderRadius:8, cursor:'pointer', boxShadow:`0 3px 8px ${c.shadow}`, transition:'transform 0.15s', transform:'rotate(-2deg)', position:'relative' }}
-              onMouseOver={e => e.currentTarget.style.transform='scale(1.15) rotate(-2deg)'}
-              onMouseOut={e => e.currentTarget.style.transform='rotate(-2deg)'}>
-              <span style={{ position:'absolute', bottom:2, right:3, fontSize:9, color:c.border, fontWeight:700, opacity:0.7 }}>{c.label.slice(0,3)}</span>
-            </button>
-          ))}
+        <div style={{ background:'white', borderRadius:16, padding:'12px 16px', boxShadow:'var(--shadow)', width:'100%', maxWidth:595, animation:'slideDown 0.2s ease' }}>
+          <p style={{ fontSize:11, fontWeight:700, color:'var(--dark-muted)', marginBottom:10, textAlign:'center' }}>📝 Escolha a cor do post-it</p>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'center' }}>
+            {POSTIT_COLORS.map(c => (
+              <button key={c.id} onClick={() => addPostit(c.id)} title={c.label}
+                style={{ width:52, height:52, background:c.bg, border:`2px solid ${c.line}`, borderRadius:6, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, boxShadow:`2px 3px 6px ${c.line}40`, transition:'transform 0.15s', transform:'rotate(-3deg)', position:'relative' }}
+                onMouseOver={e => e.currentTarget.style.transform='scale(1.12) rotate(-1deg)'}
+                onMouseOut={e => e.currentTarget.style.transform='rotate(-3deg)'}>
+                <span style={{ fontSize:9, fontWeight:700, color:c.text, fontFamily:'Quicksand' }}>{c.label}</span>
+                <span style={{ position:'absolute', top:0, left:0, right:0, height:4, background:c.line, borderRadius:'4px 4px 0 0', opacity:0.5 }}/>
+              </button>
+            ))}
+          </div>
         </div>
       )}
-
-      {/* ── Post-it Panel ── */}
 
 
       {/* ── Sticker Panel ── */}
@@ -689,7 +690,7 @@ export default function PageCanvas({ page, isOwner, onSave, onDeletePage, userId
       <div
         ref={canvasRef}
         style={{ width:'min(595px,100%)', aspectRatio:`${CANVAS_W}/${CANVAS_H}`, borderRadius:12, ...canvasBg, position:'relative', overflow:'hidden', boxShadow:'0 10px 48px rgba(27,58,31,0.16)', touchAction: isDrawMode ? 'none' : 'pan-y', flexShrink:0, cursor: isDrawMode ? 'crosshair' : 'default', WebkitUserSelect:'none', userSelect:'none' }}
-        onClick={() => { if (!isDrawMode) { setSelected(null); setPanel('none') } }}
+        onClick={() => { if (!isDrawMode) { setSelected(null); setPanel('none'); setEditingPostit(null) } }}
       >
         {/* Elementos */}
         {elements.map(el => {
